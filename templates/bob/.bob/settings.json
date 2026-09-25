@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "write_to_file|apply_diff|insert_content|search_and_replace|edit_file",
+        "hooks": [{ "type": "command", "command": "python3 \"$HOME/hack/syncsnitch/scripts/bob_hooks/guard.py\"" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [{ "type": "command", "command": "python3 \"$HOME/hack/syncsnitch/scripts/bob_hooks/logger.py\"" }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "python3 \"$HOME/hack/syncsnitch/scripts/bob_hooks/logger.py\"" }]
+      }
+    ]
+  }
+}

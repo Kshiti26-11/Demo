@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# SyncSnitch run workspace (artifacts, git worktrees, container results)
+.syncsnitch/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Tooling
+.vercel/
+node_modules/
+.DS_Store

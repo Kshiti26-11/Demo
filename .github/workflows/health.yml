@@ -1,0 +1,26 @@
+name: demo-health
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  smoke:
+    if: vars.DEMO_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Smoke-test the demo URL
+        env:
+          DEMO_URL: ${{ vars.DEMO_URL }}
+        run: uv run --no-project --with httpx python scripts/smoke_demo_url.py "$DEMO_URL"
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "Demo URL unhealthy"
+          --body "scripts/smoke_demo_url.py failed. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

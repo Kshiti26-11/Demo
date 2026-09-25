@@ -1,0 +1,9 @@
+# Vercel runtime for the SyncSnitch demo site (Root Directory = web). No grpcio on purpose.
+fastapi>=0.115
+jinja2>=3.1
+httpx>=0.27
+pydantic>=2.8
+pyyaml>=6.0
+jsonschema>=4.23
+protobuf>=7.35.1,<8
+sqlalchemy>=2.0

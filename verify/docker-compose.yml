@@ -1,0 +1,54 @@
+# SyncSnitch contract verification topology. Run once per contract version:
+#   UPSTREAM_DIR=<orders-service checkout at v1 or v2> CONSUMER_DIR=<billing-service checkout>
+#   RESULTS_DIR=<abs dir> CONTRACT_VERSION=v1|v2 docker compose -f verify/docker-compose.yml -p <name> up \
+#     --build --abort-on-container-exit --exit-code-from billing-contract-tests
+services:
+  orders-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: orders
+      POSTGRES_DB: orders
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orders -d orders"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  orders-upstream:
+    build:
+      context: ${UPSTREAM_DIR:?set UPSTREAM_DIR}
+    environment:
+      DATABASE_URL: postgresql+psycopg://orders:orders@orders-db:5432/orders
+      GRPC_PORT: "50051"
+    depends_on:
+      orders-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  orders-rest-mock:
+    image: stoplight/prism:5
+    command: ["mock", "-h", "0.0.0.0", "-p", "4010", "--multiprocess=false", "/contracts/openapi.yaml"]
+    volumes:
+      - ${UPSTREAM_DIR:?set UPSTREAM_DIR}/contracts:/contracts:ro
+
+  billing-contract-tests:
+    build:
+      context: ${CONSUMER_DIR:?set CONSUMER_DIR}
+    environment:
+      ORDERS_REST_URL: http://orders-upstream:8000
+      ORDERS_REST_MOCK_URL: http://orders-rest-mock:4010
+      ORDERS_GRPC_ADDR: orders-upstream:50051
+      REPORTS_DB_URL: postgresql+psycopg://orders:orders@orders-db:5432/orders
+      CONTRACT_VERSION: ${CONTRACT_VERSION:-v1}
+    volumes:
+      - ${RESULTS_DIR:?set RESULTS_DIR}:/results
+    depends_on:
+      orders-upstream:
+        condition: service_healthy
+      orders-rest-mock:
+        condition: service_started

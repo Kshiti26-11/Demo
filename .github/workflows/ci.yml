@@ -1,0 +1,14 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: Tests (exit code 5 = no tests collected yet; allowed until Persons 3 and 4 add tests)
+        run: uv run pytest -q || [ $? -eq 5 ]

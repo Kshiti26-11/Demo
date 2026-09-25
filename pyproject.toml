@@ -1,0 +1,38 @@
+# Shared scaffolding - DO NOT EDIT (Persons 3 and 4 both build inside this package).
+# Every dependency the engine, the verifier and the demo-site tests need is declared here up front,
+# so nobody has to touch this file or uv.lock during the hackathon. Use: uv sync --frozen
+[project]
+name = "syncsnitch"
+version = "0.1.0"
+description = "SyncSnitch - autonomous, human-gated contract-drift agent built with IBM Bob"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "pyyaml>=6.0",
+  "jsonschema>=4.23",
+  "protobuf>=7.35.1,<8",
+  "grpcio-tools>=1.84",
+  "jinja2>=3.1",
+]
+
+[project.scripts]
+syncsnitch = "syncsnitch.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "fastapi>=0.115",
+  "httpx>=0.27",
+  "uvicorn>=0.30",
+  "sqlalchemy>=2.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["syncsnitch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,53 @@
+name: syncsnitch-verify
+on:
+  workflow_call:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the companion PR
+        uses: actions/checkout@v4
+        with:
+          path: consumer
+          fetch-depth: 0
+      - name: Read .syncsnitch.json
+        id: meta
+        working-directory: consumer
+        run: |
+          test -f .syncsnitch.json || { echo "::error::.syncsnitch.json is missing in this branch"; exit 1; }
+          {
+            echo "upstream_repo=$(jq -r .upstream_repo .syncsnitch.json)"
+            echo "upstream_base=$(jq -r .upstream_base .syncsnitch.json)"
+            echo "upstream_head=$(jq -r .upstream_head .syncsnitch.json)"
+          } >> "$GITHUB_OUTPUT"
+      - name: Check out the upstream
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.meta.outputs.upstream_repo }}
+          path: upstream
+          fetch-depth: 0
+      - name: Check out SyncSnitch
+        uses: actions/checkout@v4
+        with:
+          repository: kshiti26-11/demo
+          ref: main
+          path: syncsnitch
+      - uses: astral-sh/setup-uv@v6
+      - name: Install SyncSnitch
+        working-directory: syncsnitch
+        run: uv sync --frozen
+      - name: Verify with mock containers (v1 and v2)
+        working-directory: syncsnitch
+        env:
+          RUN_ID: ci-${{ github.run_id }}
+          UPSTREAM_BASE: ${{ steps.meta.outputs.upstream_base }}
+          UPSTREAM_HEAD: ${{ steps.meta.outputs.upstream_head }}
+        run: >-
+          uv run syncsnitch verify --run-id "$RUN_ID" --upstream ../upstream
+          --base "$UPSTREAM_BASE" --head "$UPSTREAM_HEAD" --consumer ../consumer
+      - name: Publish the verification table
+        if: always()
+        env:
+          RUN_ID: ci-${{ github.run_id }}
+        run: cat "syncsnitch/.syncsnitch/runs/$RUN_ID/VERIFICATION.md" >> "$GITHUB_STEP_SUMMARY" || true

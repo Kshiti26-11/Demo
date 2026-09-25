@@ -1,0 +1,14 @@
+name: syncsnitch
+on:
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "migrations/**"
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  detect:
+    uses: kshiti26-11/demo/.github/workflows/syncsnitch-detect.yml@main
+    with:
+      consumer_repo: kshiti26-11/billing-service

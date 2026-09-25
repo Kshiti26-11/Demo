@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SyncSnitch
 
 **An autonomous, human-gated contract-drift agent built with IBM Bob 2.0.**
@@ -35,3 +36,6 @@ The engine, verifier, Bob modes and website get built by the team with IBM Bob, 
 
 ## Provenance
 The planning docs, reference contracts and shared scaffolding were prepared with Claude Code. All product code is built by **IBM Bob** from the prompts in WORK.md, and every Bob task is exported to `bob_sessions/`.
+=======
+# Demo
+>>>>>>> 17945fdd5c8fb7f91679c615dce4d3123426f042

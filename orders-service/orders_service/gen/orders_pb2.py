@@ -24,19 +24,23 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0corders.proto\x12\x06orders\"*\n\x16GetOrderSummaryRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"q\n\x0cOrderSummary\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12\x15\n\rcustomer_name\x18\x02 \x01(\t\x12\x13\n\x0btotal_price\x18\x03 \x01(\x01\x12#\n\x06status\x18\x04 \x01(\x0e\x32\x13.orders.OrderStatus*\x92\x01\n\x0bOrderStatus\x12\x1c\n\x18ORDER_STATUS_UNSPECIFIED\x10\x00\x12\x18\n\x14ORDER_STATUS_PENDING\x10\x01\x12\x15\n\x11ORDER_STATUS_PAID\x10\x02\x12\x18\n\x14ORDER_STATUS_SHIPPED\x10\x03\x12\x1a\n\x16ORDER_STATUS_CANCELLED\x10\x04\x32V\n\x0bOrderLookup\x12G\n\x0fGetOrderSummary\x12\x1e.orders.GetOrderSummaryRequest\x1a\x14.orders.OrderSummaryb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0corders.proto\x12\x06orders\"*\n\x16GetOrderSummaryRequest\x12\x10\n\x08order_id\x18\x01 \x01(\t\"/\n\x05Money\x12\x14\n\x0c\x61mount_minor\x18\x01 \x01(\x03\x12\x10\n\x08\x63urrency\x18\x02 \x01(\t\"5\n\x08\x43ustomer\x12\x13\n\x0b\x63ustomer_id\x18\x01 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x02 \x01(\t\"\xc5\x01\n\x0cOrderSummary\x12\x10\n\x08order_id\x18\x01 \x01(\t\x12#\n\x06status\x18\x04 \x01(\x0e\x32\x13.orders.OrderStatus\x12\"\n\x08\x63ustomer\x18\x05 \x01(\x0b\x32\x10.orders.Customer\x12\x1c\n\x05total\x18\x06 \x01(\x0b\x32\r.orders.Money\x12\x14\n\x0cshipping_eta\x18\x07 \x01(\tJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04R\rcustomer_nameR\x0btotal_price*\x9b\x01\n\x0bOrderStatus\x12\x1c\n\x18ORDER_STATUS_UNSPECIFIED\x10\x00\x12!\n\x1dORDER_STATUS_AWAITING_PAYMENT\x10\x01\x12\x15\n\x11ORDER_STATUS_PAID\x10\x02\x12\x18\n\x14ORDER_STATUS_SHIPPED\x10\x03\x12\x1a\n\x16ORDER_STATUS_CANCELLED\x10\x04\x32V\n\x0bOrderLookup\x12G\n\x0fGetOrderSummary\x12\x1e.orders.GetOrderSummaryRequest\x1a\x14.orders.OrderSummaryb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'orders_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_ORDERSTATUS']._serialized_start=184
-  _globals['_ORDERSTATUS']._serialized_end=330
+  _globals['_ORDERSTATUS']._serialized_start=373
+  _globals['_ORDERSTATUS']._serialized_end=528
   _globals['_GETORDERSUMMARYREQUEST']._serialized_start=24
   _globals['_GETORDERSUMMARYREQUEST']._serialized_end=66
-  _globals['_ORDERSUMMARY']._serialized_start=68
-  _globals['_ORDERSUMMARY']._serialized_end=181
-  _globals['_ORDERLOOKUP']._serialized_start=332
-  _globals['_ORDERLOOKUP']._serialized_end=418
+  _globals['_MONEY']._serialized_start=68
+  _globals['_MONEY']._serialized_end=115
+  _globals['_CUSTOMER']._serialized_start=117
+  _globals['_CUSTOMER']._serialized_end=170
+  _globals['_ORDERSUMMARY']._serialized_start=173
+  _globals['_ORDERSUMMARY']._serialized_end=370
+  _globals['_ORDERLOOKUP']._serialized_start=530
+  _globals['_ORDERLOOKUP']._serialized_end=616
 # @@protoc_insertion_point(module_scope)

@@ -1,6 +1,5 @@
+import os
 import socket
-import threading
-import time
 
 import grpc
 import pytest
@@ -18,15 +17,11 @@ def _free_port() -> int:
 
 @pytest.fixture(scope="module")
 def grpc_channel():
-    db_url = "sqlite+pysqlite:///:memory:"
-    # Seed the database via rest.py so grpc_server shares same engine
-    # Use a file-based SQLite so grpc_server can also access it
-    import tempfile, os
+    import tempfile
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     tmp.close()
     file_url = f"sqlite:///{tmp.name}"
 
-    # Init schema + seed via REST app
     create_app(file_url, init_schema=True, seed=True)
 
     port = _free_port()
@@ -48,8 +43,9 @@ def grpc_channel():
 def test_get_order_summary_paid(grpc_channel):
     stub, _ = grpc_channel
     resp = stub.GetOrderSummary(orders_pb2.GetOrderSummaryRequest(order_id="o-1001"))
-    assert abs(resp.total_price - 19.99) < 0.001
-    assert resp.customer_name == "Ada Lovelace"
+    assert resp.total.amount_minor == 1999
+    assert resp.total.currency == "USD"
+    assert resp.customer.display_name == "Ada Lovelace"
     assert resp.status == orders_pb2.ORDER_STATUS_PAID
 
 

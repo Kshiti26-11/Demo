@@ -1,10 +1,12 @@
 openapi: 3.1.0
 info:
   title: Orders API
-  version: 1.0.0
+  version: 2.0.0
   description: >-
     Internal REST contract owned by orders-service (upstream). Consumed by
-    billing-service (downstream). Reference copy for SyncSnitch - do not edit.
+    billing-service (downstream). v2 = money in minor units, structured
+    customer, PENDING renamed to AWAITING_PAYMENT, optional shipping_eta.
+    Reference copy for SyncSnitch - do not edit.
 servers:
   - url: http://localhost:8000
 paths:
@@ -40,23 +42,40 @@ paths:
                 all:
                   value:
                     - order_id: o-1001
-                      customer_name: Ada Lovelace
-                      total_price: 19.99
+                      customer:
+                        customer_id: c-1001
+                        display_name: Ada Lovelace
+                      total:
+                        amount_minor: 1999
+                        currency: USD
                       status: PAID
                       created_at: "2026-09-01T10:00:00Z"
                     - order_id: o-1002
-                      customer_name: Alan Turing
-                      total_price: 5.0
-                      status: PENDING
+                      customer:
+                        customer_id: c-1002
+                        display_name: Alan Turing
+                      total:
+                        amount_minor: 500
+                        currency: USD
+                      status: AWAITING_PAYMENT
                       created_at: "2026-09-02T11:00:00Z"
                     - order_id: o-1003
-                      customer_name: Grace Hopper
-                      total_price: 120.5
+                      customer:
+                        customer_id: c-1003
+                        display_name: Grace Hopper
+                      total:
+                        amount_minor: 12050
+                        currency: USD
                       status: SHIPPED
                       created_at: "2026-09-03T12:00:00Z"
+                      shipping_eta: "2026-09-05T12:00:00Z"
                     - order_id: o-1004
-                      customer_name: Edsger Dijkstra
-                      total_price: 42.0
+                      customer:
+                        customer_id: c-1004
+                        display_name: Edsger Dijkstra
+                      total:
+                        amount_minor: 4200
+                        currency: USD
                       status: CANCELLED
                       created_at: "2026-09-04T13:00:00Z"
   /orders/{order_id}:
@@ -81,16 +100,24 @@ paths:
                 paid:
                   value:
                     order_id: o-1001
-                    customer_name: Ada Lovelace
-                    total_price: 19.99
+                    customer:
+                      customer_id: c-1001
+                      display_name: Ada Lovelace
+                    total:
+                      amount_minor: 1999
+                      currency: USD
                     status: PAID
                     created_at: "2026-09-01T10:00:00Z"
                 unpaid:
                   value:
                     order_id: o-1002
-                    customer_name: Alan Turing
-                    total_price: 5.0
-                    status: PENDING
+                    customer:
+                      customer_id: c-1002
+                      display_name: Alan Turing
+                    total:
+                      amount_minor: 500
+                      currency: USD
+                    status: AWAITING_PAYMENT
                     created_at: "2026-09-02T11:00:00Z"
         "404":
           description: Unknown order
@@ -114,27 +141,51 @@ components:
           const: ok
     OrderStatus:
       type: string
-      enum: [PENDING, PAID, SHIPPED, CANCELLED]
+      enum: [AWAITING_PAYMENT, PAID, SHIPPED, CANCELLED]
+    Money:
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency]
+      properties:
+        amount_minor:
+          type: integer
+          minimum: 0
+          description: Amount in minor units (cents), e.g. 1999 = 19.99 USD
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+    Customer:
+      type: object
+      additionalProperties: false
+      required: [customer_id, display_name]
+      properties:
+        customer_id:
+          type: string
+          pattern: "^c-[0-9]{4}$"
+        display_name:
+          type: string
+          minLength: 1
     Order:
       type: object
       additionalProperties: false
-      required: [order_id, customer_name, total_price, status, created_at]
+      required: [order_id, customer, total, status, created_at]
       properties:
         order_id:
           type: string
           pattern: "^o-[0-9]{4}$"
-        customer_name:
-          type: string
-          minLength: 1
-        total_price:
-          type: number
-          minimum: 0
-          description: Order total in major currency units (USD), e.g. 19.99
+        customer:
+          $ref: "#/components/schemas/Customer"
+        total:
+          $ref: "#/components/schemas/Money"
         status:
           $ref: "#/components/schemas/OrderStatus"
         created_at:
           type: string
           format: date-time
+        shipping_eta:
+          type: string
+          format: date-time
+          description: Optional; present only when the order has shipped
     Error:
       type: object
       additionalProperties: false

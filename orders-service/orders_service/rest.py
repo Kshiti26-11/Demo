@@ -24,19 +24,19 @@ def create_app(
         with Session() as s:
             _seed_module.seed(s)
 
-    app = FastAPI(title="orders-service", version="1.0.0")
+    app = FastAPI(title="orders-service", version="2.0.0")
 
     @app.get("/health")
     def health():
         return {"status": "ok"}
 
-    @app.get("/orders", response_model=list[OrderOut])
+    @app.get("/orders", response_model=list[OrderOut], response_model_exclude_none=True)
     def list_orders():
         with Session() as s:
             rows = s.query(Order).order_by(Order.order_id).all()
             return [OrderOut.from_row(r) for r in rows]
 
-    @app.get("/orders/{order_id}", response_model=OrderOut)
+    @app.get("/orders/{order_id}", response_model=OrderOut, response_model_exclude_none=True)
     def get_order(order_id: str):
         with Session() as s:
             row = s.get(Order, order_id)

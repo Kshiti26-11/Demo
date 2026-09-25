@@ -1,11 +1,9 @@
-import json
 from pathlib import Path
 
 import pytest
 import yaml
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
-from jsonschema.validators import validator_for
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
@@ -28,12 +26,9 @@ def client():
 @pytest.fixture(scope="module")
 def order_schema():
     spec = yaml.safe_load(OPENAPI_PATH.read_text())
-    # Register the full OpenAPI doc at a base URI so $ref resolution works
     base_uri = "https://orders-service/openapi.yaml"
     resource = Resource.from_contents(spec, default_specification=DRAFT202012)
     registry = Registry().with_resource(base_uri, resource)
-    # The Order schema $ref uses fragment-only refs; embed full spec as validator schema
-    # so the validator's resolver base matches the registry URI
     return Draft202012Validator(
         {"$ref": f"{base_uri}#/components/schemas/Order"},
         registry=registry,
@@ -57,17 +52,25 @@ def test_order_1001_matches_openapi_example(client):
     r = client.get("/orders/o-1001")
     assert r.status_code == 200
     data = r.json()
-    assert data["order_id"] == "o-1001"
-    assert data["customer_name"] == "Ada Lovelace"
-    assert data["total_price"] == 19.99
-    assert data["status"] == "PAID"
-    assert data["created_at"] == "2026-09-01T10:00:00Z"
+    assert data == {
+        "order_id": "o-1001",
+        "customer": {"customer_id": "c-1001", "display_name": "Ada Lovelace"},
+        "total": {"amount_minor": 1999, "currency": "USD"},
+        "status": "PAID",
+        "created_at": "2026-09-01T10:00:00Z",
+    }
 
 
-def test_order_1002_pending(client):
+def test_order_1002_awaiting_payment(client):
     r = client.get("/orders/o-1002")
     assert r.status_code == 200
-    assert r.json()["status"] == "PENDING"
+    assert r.json()["status"] == "AWAITING_PAYMENT"
+
+
+def test_order_1003_shipping_eta(client):
+    r = client.get("/orders/o-1003")
+    assert r.status_code == 200
+    assert r.json()["shipping_eta"] == "2026-09-05T12:00:00Z"
 
 
 def test_order_not_found(client):

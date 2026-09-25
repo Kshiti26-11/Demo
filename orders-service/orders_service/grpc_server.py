@@ -18,11 +18,23 @@ class OrderLookup(orders_pb2_grpc.OrderLookupServicer):
         if row is None:
             context.abort(grpc.StatusCode.NOT_FOUND, "order not found")
             return
+        eta = (
+            row.shipping_eta.strftime("%Y-%m-%dT%H:%M:%SZ")
+            if row.shipping_eta
+            else ""
+        )
         return orders_pb2.OrderSummary(
             order_id=row.order_id,
-            customer_name=row.customer_name,
-            total_price=float(row.total_price),
             status=orders_pb2.OrderStatus.Value("ORDER_STATUS_" + row.status),
+            customer=orders_pb2.Customer(
+                customer_id=row.customer_id,
+                display_name=row.customer_display_name,
+            ),
+            total=orders_pb2.Money(
+                amount_minor=row.total_minor,
+                currency=row.currency,
+            ),
+            shipping_eta=eta,
         )
 
 

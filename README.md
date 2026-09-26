@@ -33,9 +33,3 @@ When an upstream PR changes a REST payload, a gRPC definition or a database migr
 - `bob_sessions/`: IBM Bob evidence (exported task histories and screenshots).
 
 The engine, verifier, Bob modes and website get built by the team with IBM Bob, following WORK.md.
-
-## Provenance
-The planning docs, reference contracts and shared scaffolding were prepared with Claude Code. All product code is built by **IBM Bob** from the prompts in WORK.md, and every Bob task is exported to `bob_sessions/`.
-=======
-# Demo
->>>>>>> 17945fdd5c8fb7f91679c615dce4d3123426f042

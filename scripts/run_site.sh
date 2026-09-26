@@ -6,7 +6,9 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 port="${1:-${PORT:-8000}}"
 cd "$root"
-[ -x .venv/bin/uvicorn ] || uv sync --frozen
+venvbin="$root/.venv/bin"; [ -d "$venvbin" ] || venvbin="$root/.venv/Scripts"  # uv on Windows uses Scripts/, not bin/
+uvicorn="$venvbin/uvicorn"; [ -e "$uvicorn" ] || uvicorn="$uvicorn.exe"
+[ -e "$uvicorn" ] || uv sync --frozen
 cd web
 echo "SyncSnitch on http://localhost:$port"
-exec ../.venv/bin/uvicorn webapp.main:app --host 127.0.0.1 --port "$port"
+exec "$uvicorn" webapp.main:app --host 127.0.0.1 --port "$port"

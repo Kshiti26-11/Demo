@@ -45,7 +45,9 @@ set_var SYNCSNITCH_AGENT_BACKEND grok
 
 say "Testing the key with one tiny request..."
 cd "$root"
-if .venv/bin/python -m web.webapp.llm_agent grok; then
+venvbin="$root/.venv/bin"; [ -d "$venvbin" ] || venvbin="$root/.venv/Scripts"  # uv on Windows uses Scripts/, not bin/
+python="$venvbin/python"; [ -e "$python" ] || python="$python.exe"
+if "$python" -m web.webapp.llm_agent grok; then
   say "Grok now runs the agents. Open the SyncSnitch site (bash scripts/run_site.sh), paste a GitHub link, press Run 3 Agents."
 else
   say "The test request failed: check the key and the model name, then run this script again."

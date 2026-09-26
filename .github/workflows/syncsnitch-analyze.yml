@@ -1,0 +1,89 @@
+name: syncsnitch-analyze
+# Started by the demo website ("Verify in GitHub Actions" on /analyze): S1 detect, S2 trace and S5 verify with
+# Docker mock containers for any public repo that holds an upstream and a consumer folder (e.g. kshiti26-11/demo:
+# orders-service/ and billing-service/). Results: the job summary and the "syncsnitch-<run_id>" artifact.
+# Needs to be on the default branch to be dispatchable.
+run-name: syncsnitch-analyze ${{ inputs.run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: owner/name of the repository to analyze
+        required: true
+      upstream:
+        description: upstream folder inside that repo ("" = repo root)
+        default: ""
+      consumer:
+        description: consumer folder inside that repo ("" = repo root)
+        default: ""
+      base:
+        description: upstream base ref (old contract)
+        required: true
+      head:
+        description: upstream head ref (new contract)
+        required: true
+      consumer_ref:
+        description: ref of the consumer to verify (e.g. the SyncSnitch fix branch); defaults to head
+        default: ""
+      run_id:
+        description: SyncSnitch run id (w-YYYYMMDD-HHMMSS-xxxx)
+        required: true
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET_REPO: ${{ inputs.repo }}
+      UPSTREAM_DIR: ${{ inputs.upstream }}
+      CONSUMER_DIR: ${{ inputs.consumer }}
+      BASE_REF: ${{ inputs.base }}
+      HEAD_REF: ${{ inputs.head }}
+      CONSUMER_REF: ${{ inputs.consumer_ref || inputs.head }}
+      RUN_ID: ${{ inputs.run_id }}
+    steps:
+      - name: Validate inputs
+        run: |
+          [[ "$TARGET_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "::error::bad repo"; exit 1; }
+          [[ "$RUN_ID" =~ ^w-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$ ]] || { echo "::error::bad run id"; exit 1; }
+          for v in "$UPSTREAM_DIR" "$CONSUMER_DIR"; do
+            [[ "$v" =~ ^[A-Za-z0-9_./-]*$ && "$v" != *..* ]] || { echo "::error::bad folder $v"; exit 1; }
+          done
+      - name: Check out SyncSnitch
+        uses: actions/checkout@v4
+        with:
+          path: syncsnitch
+      - name: Check out the repository to analyze
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repo }}
+          ref: ${{ inputs.consumer_ref || inputs.head }}
+          path: target
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Install SyncSnitch
+        working-directory: syncsnitch
+        run: uv sync --frozen
+      - name: S1 detect + S2 trace
+        working-directory: syncsnitch
+        run: |
+          uv run syncsnitch detect --upstream "../target/$UPSTREAM_DIR" --base "$BASE_REF" --head "$HEAD_REF" --run-id "$RUN_ID"
+          uv run syncsnitch trace --run-id "$RUN_ID" --consumer "../target/$CONSUMER_DIR"
+      - name: S5 verify with mock containers (v1 and v2)
+        working-directory: syncsnitch
+        run: >-
+          uv run syncsnitch verify --run-id "$RUN_ID" --upstream "../target/$UPSTREAM_DIR"
+          --base "$BASE_REF" --head "$HEAD_REF" --consumer "../target/$CONSUMER_DIR" --consumer-base "$HEAD_REF"
+      - name: Publish the verification table
+        if: always()
+        run: cat "syncsnitch/.syncsnitch/runs/$RUN_ID/VERIFICATION.md" >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syncsnitch-${{ inputs.run_id }}
+          path: |
+            syncsnitch/.syncsnitch/runs/${{ inputs.run_id }}/*.json
+            syncsnitch/.syncsnitch/runs/${{ inputs.run_id }}/*.md
+          if-no-files-found: ignore

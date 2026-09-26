@@ -1,126 +1,134 @@
-from concurrent.futures import ThreadPoolExecutor
+"""Trace package: find downstream usages of changed contract tokens and the endpoints they break."""
+from __future__ import annotations
+
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-import shutil
-from typing import Any
 
-from .files import scan_json_fixture_file, scan_proto_file, scan_sql_file
-from .python_ast import build_endpoint_resolver, scan_python_file
+from .files import scan_json_fixture, scan_proto_file, scan_sql_file
+from .python_ast import PyFileIndex, scan_python_file
 
-IGNORED_DIRS = {".venv", ".git", "__pycache__", "gen", "node_modules", ".pytest_cache", ".syncsnitch"}
-
-
-def _is_ignored(path: Path) -> bool:
-    for part in path.parts:
-        if part in IGNORED_DIRS:
-            return True
-    return False
+_SKIP_DIRS = {".venv", ".git", "__pycache__", "gen", "node_modules", ".pytest_cache"}
+MAX_HOPS = 3
 
 
-def trace_consumer(changes: list[dict[str, Any]], consumer: Path) -> list[dict[str, Any]]:
-    consumer_path = Path(consumer).resolve()
+def breaking_tokens(changes: list[dict]) -> dict[str, list[str]]:
+    """The "old" value of every BREAKING change -> the ids of the changes that removed it."""
+    tokens: dict[str, list[str]] = {}
+    for ch in changes:
+        old = ch.get("old")
+        if ch.get("breaking") and isinstance(old, str) and old:
+            ids = tokens.setdefault(old, [])
+            if ch["id"] not in ids:
+                ids.append(ch["id"])
+    return tokens
 
-    # Tokens = the "old" value of every BREAKING change (token -> list of change ids)
-    token_map: dict[str, list[str]] = {}
-    for c in changes:
-        if c.get("breaking") and c.get("old"):
-            tok = str(c["old"])
-            token_map.setdefault(tok, []).append(c["id"])
 
-    if not token_map:
+def _files(consumer_root: Path) -> list[str]:
+    rel_paths: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(consumer_root):
+        dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
+        for fname in filenames:
+            rel_paths.append(os.path.relpath(os.path.join(dirpath, fname), consumer_root).replace("\\", "/"))
+    return rel_paths
+
+
+def _scan(consumer_root: Path, rel: str, tokens: dict[str, list[str]]) -> PyFileIndex | list[dict]:
+    suffix = Path(rel).suffix.lower()
+    if suffix not in (".py", ".sql", ".proto", ".json"):
         return []
-
-    # Collect all python files first to build resolver
-    py_files: list[Path] = []
-    sql_files: list[Path] = []
-    proto_files: list[Path] = []
-    fixture_files: list[Path] = []
-
-    for p in consumer_path.rglob("*"):
-        if p.is_file() and not _is_ignored(p.relative_to(consumer_path)):
-            if p.suffix == ".py":
-                py_files.append(p)
-            elif p.suffix == ".sql":
-                sql_files.append(p)
-            elif p.suffix == ".proto":
-                proto_files.append(p)
-            elif p.suffix == ".json" and "tests" in p.parts:
-                fixture_files.append(p)
-
-    # Pre-read python contents
-    py_contents: dict[str, str] = {}
-    for py in py_files:
-        rel = py.relative_to(consumer_path).as_posix()
-        try:
-            py_contents[rel] = py.read_text(encoding="utf-8")
-        except Exception:
-            continue
-
-    resolver = build_endpoint_resolver(py_contents)
-
-    all_hits: list[dict[str, Any]] = []
-
-    def scan_file(file_path: Path):
-        rel = file_path.relative_to(consumer_path).as_posix()
-        if file_path.suffix == ".py":
-            return scan_python_file(file_path, rel, token_map, resolver)
-        elif file_path.suffix == ".sql":
-            return scan_sql_file(file_path, rel, token_map, py_contents, resolver)
-        elif file_path.suffix == ".proto":
-            return scan_proto_file(file_path, rel, token_map)
-        elif file_path.suffix == ".json":
-            return scan_json_fixture_file(file_path, rel, token_map)
+    if suffix == ".json" and not rel.startswith("tests/"):
         return []
+    try:
+        source = (consumer_root / rel).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    if suffix == ".py":
+        return scan_python_file(source, rel, tokens)
+    if suffix == ".sql":
+        return scan_sql_file(source, rel, tokens)
+    if suffix == ".proto":
+        return scan_proto_file(source, rel, tokens)
+    return scan_json_fixture(source, rel, tokens)
 
-    all_target_files = py_files + sql_files + proto_files + fixture_files
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        results = executor.map(scan_file, all_target_files)
-        for r in results:
-            all_hits.extend(r)
 
-    # Sort hits by (file, line)
-    all_hits.sort(key=lambda h: (h["file"], h["line"]))
-    return all_hits
+class _EndpointGraph:
+    """Routes reachable from a symbol by walking "who references this symbol" (consumer-wide)."""
+
+    def __init__(self, indexes: list[PyFileIndex]):
+        self.routes: dict[str, set[str]] = {}
+        self.referrers: dict[str, set[str]] = {}
+        self.constants: list[tuple[str, str]] = []
+        for idx in indexes:
+            for fn, routes in idx.routes.items():
+                self.routes.setdefault(fn, set()).update(routes)
+            for symbol, names in idx.references.items():
+                for name in names:
+                    self.referrers.setdefault(name, set()).add(symbol)
+            self.constants.extend(idx.constants)
+
+    def endpoints(self, symbols: list[str]) -> list[str]:
+        found: set[str] = set()
+        frontier, visited = set(symbols), set(symbols)
+        for hop in range(MAX_HOPS + 1):
+            for sym in frontier:
+                found.update(self.routes.get(sym, ()))
+            if hop == MAX_HOPS:
+                break
+            frontier = {r for sym in frontier for r in self.referrers.get(sym, ())} - visited
+            visited |= frontier
+        return sorted(found)
+
+    def symbols_mentioning(self, text: str) -> list[str]:
+        return sorted({sym for sym, value in self.constants if text in value})
 
 
-def run_trace(run_id: str, consumer: Path, runs_dir: Path) -> dict[str, Any]:
-    run_folder = runs_dir / run_id
-    drift_file = run_folder / "drift.json"
-    if not drift_file.exists():
-        raise FileNotFoundError(f"Missing drift.json at {drift_file}")
+def trace_consumer(changes: list[dict], consumer: str | Path) -> list[dict]:
+    """Every usage of a breaking change's old token in the consumer, with the endpoints it breaks."""
+    tokens = breaking_tokens(changes)
+    if not tokens:
+        return []
+    root = Path(consumer).resolve()
+    rel_paths = _files(root)
+    with ThreadPoolExecutor() as pool:
+        results = list(pool.map(lambda rel: _scan(root, rel, tokens), rel_paths))
 
-    drift_data = json.loads(drift_file.read_text(encoding="utf-8"))
-    changes = drift_data.get("changes", [])
+    # tests are not on any request path: they neither define routes nor get endpoints
+    graph = _EndpointGraph([
+        r for rel, r in zip(rel_paths, results) if isinstance(r, PyFileIndex) and not rel.startswith("tests/")
+    ])
+    hits: list[dict] = []
+    for rel, result in zip(rel_paths, results):
+        if isinstance(result, PyFileIndex):
+            for hit in result.hits:
+                hit["endpoints"] = [] if hit["in_tests"] else graph.endpoints([hit["symbol"]])
+                hits.append(hit)
+        elif result:
+            if rel.endswith(".sql"):
+                eps = graph.endpoints(graph.symbols_mentioning(Path(rel).name))
+                for hit in result:
+                    hit["endpoints"] = eps
+            hits.extend(result)
 
-    consumer_path = Path(consumer).resolve()
-    hits = trace_consumer(changes, consumer_path)
+    hits.sort(key=lambda h: (h["file"], h["line"], h["token"]))
+    return hits
 
-    unique_files = sorted(set(h["file"] for h in hits))
-    unique_endpoints = sorted(set(ep for h in hits for ep in h.get("endpoints", [])))
 
-    candidates: dict[str, Any] = {
+def run_trace(run_id: str, consumer: str | Path, runs_dir: str | Path) -> dict:
+    """Read drift.json, trace the consumer, write candidates.json and return it."""
+    run_dir = Path(runs_dir) / run_id
+    drift = json.loads((run_dir / "drift.json").read_text(encoding="utf-8"))
+    hits = trace_consumer(drift.get("changes", []), consumer)
+    candidates = {
         "run_id": run_id,
-        "consumer": str(consumer_path),
+        "consumer": str(Path(consumer).resolve()),
         "hits": hits,
         "summary": {
             "hits": len(hits),
-            "files": unique_files,
-            "endpoints": unique_endpoints,
+            "files": len({h["file"] for h in hits}),
+            "endpoints": sorted({e for h in hits for e in h["endpoints"]}),
         },
     }
-
-    out_file = run_folder / "candidates.json"
-    out_file.write_text(json.dumps(candidates, indent=2), encoding="utf-8")
-
-    # Try copying RFC docx into run folder if found in reference or upstream
-    docx_candidates = [
-        Path("contracts/reference/orders-v2-change-proposal.docx"),
-        consumer_path.parent / "syncsnitch" / "contracts" / "reference" / "orders-v2-change-proposal.docx",
-        consumer_path.parent / "orders-service" / "docs" / "orders-v2-change-proposal.docx",
-    ]
-    for dc in docx_candidates:
-        if dc.exists():
-            shutil.copy(dc, run_folder / "change-proposal.docx")
-            break
-
+    (run_dir / "candidates.json").write_text(json.dumps(candidates, indent=2), encoding="utf-8")
     return candidates

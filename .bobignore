@@ -9,3 +9,7 @@ web/_vendor/
 **/*.binpb
 bob_sessions/screenshots/
 bob_sessions/raw/
+
+# Secrets: never let Bob read them
+.env
+.env.*

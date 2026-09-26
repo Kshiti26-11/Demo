@@ -4,7 +4,7 @@ class OrderNotFound(Exception):
 
 def get_order_summary(addr: str, order_id: str):
     import grpc
-    from billing.clients.gen import orders_pb2, orders_pb2_grpc
+    from .gen import orders_pb2, orders_pb2_grpc
 
     channel = grpc.insecure_channel(addr)
     try:

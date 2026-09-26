@@ -1,140 +1,245 @@
-from pathlib import Path
+"""gRPC/protobuf drift detection."""
+from __future__ import annotations
+
+import os
+import re
 import tempfile
-from typing import Any
-from google.protobuf import descriptor_pb2
 
 
 def compile_proto(text: str) -> bytes:
-    import grpc_tools
-    from grpc_tools import protoc
+    """Compile proto text to a serialised FileDescriptorSet with grpc_tools (lazy import)."""
+    import grpc_tools  # noqa: PLC0415
+    from grpc_tools import protoc  # noqa: PLC0415
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        tmp_path = Path(tmpdir)
-        proto_path = tmp_path / "orders.proto"
-        proto_path.write_text(text, encoding="utf-8")
-        out_binpb = tmp_path / "out.binpb"
-        proto_include = Path(grpc_tools.__file__).parent / "_proto"
-
-        args = [
+        proto_path = os.path.join(tmpdir, "orders.proto")
+        desc_path = os.path.join(tmpdir, "out.binpb")
+        with open(proto_path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        grpc_include = os.path.join(os.path.dirname(grpc_tools.__file__), "_proto")
+        rc = protoc.main([
             "grpc_tools.protoc",
-            f"-I{tmp_path}",
-            f"-I{proto_include}",
+            f"-I{tmpdir}",
+            f"-I{grpc_include}",
             "--include_imports",
-            f"--descriptor_set_out={out_binpb}",
-            str(proto_path),
-        ]
-        rc = protoc.main(args)
-        if rc != 0 or not out_binpb.exists():
-            raise RuntimeError(f"protoc failed with exit code {rc}")
-        return out_binpb.read_bytes()
+            f"--descriptor_set_out={desc_path}",
+            proto_path,
+        ])
+        if rc != 0:
+            raise RuntimeError(f"protoc failed with code {rc}")
+        with open(desc_path, "rb") as fh:
+            return fh.read()
 
 
-def diff_descriptor_sets(old: bytes, new: bytes) -> list[dict[str, Any]]:
-    old_fds = descriptor_pb2.FileDescriptorSet.FromString(old)
-    new_fds = descriptor_pb2.FileDescriptorSet.FromString(new)
+# ---------------------------------------------------------------------------
+# Pure-Python fallback (the Vercel demo site ships without grpcio-tools on purpose)
+# ---------------------------------------------------------------------------
 
-    # Map full names to descriptors for primary files (usually the last or non-standard ones)
-    def collect_definitions(fds: descriptor_pb2.FileDescriptorSet):
-        messages = {}
-        enums = {}
-        for f in fds.file:
-            # Skip standard google/protobuf files if any
-            if f.name.startswith("google/protobuf/"):
+_SCALARS = {
+    "double": 1, "float": 2, "int64": 3, "uint64": 4, "int32": 5, "fixed64": 6, "fixed32": 7, "bool": 8,
+    "string": 9, "bytes": 12, "uint32": 13, "sfixed32": 15, "sfixed64": 16, "sint32": 17, "sint64": 18,
+}
+_TYPE_MESSAGE, _TYPE_ENUM = 11, 14
+_TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|[A-Za-z_][\w.]*|-?\d+|[{}\[\]=;<>,()]')
+
+
+def parse_proto_text(text: str) -> bytes:
+    """
+    Parse a simple proto3 file (package, top-level and nested messages/enums, scalar and message/enum fields)
+    into a serialised FileDescriptorSet. Field and enum numbers - what the diff compares - are exact; options
+    and services are skipped. Used only when grpc_tools is not installed.
+    """
+    from google.protobuf import descriptor_pb2  # noqa: PLC0415
+
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"//[^\n]*", " ", text)
+    tokens = _TOKEN.findall(text)
+    pos = 0
+    fdp = descriptor_pb2.FileDescriptorProto(name="orders.proto", syntax="proto3")
+    fields_to_type: list[tuple[object, str]] = []
+    enum_names: set[str] = set()
+
+    def skip_block() -> None:
+        nonlocal pos
+        depth = 0
+        while pos < len(tokens):
+            tok = tokens[pos]
+            pos += 1
+            if tok == "{":
+                depth += 1
+            elif tok == "}":
+                depth -= 1
+                if depth == 0:
+                    return
+
+    def skip_statement() -> None:
+        nonlocal pos
+        while pos < len(tokens) and tokens[pos] != ";":
+            pos += 1
+        pos += 1
+
+    def parse_enum(target, scope: str) -> None:
+        nonlocal pos
+        name = tokens[pos + 1]
+        enum_names.add(f"{scope}{name}")
+        en = target.add(name=name)
+        pos += 3  # enum <name> {
+        while tokens[pos] != "}":
+            if tokens[pos] in ("option", "reserved"):
+                skip_statement()
                 continue
-            pkg = f.package
-            prefix = f"{pkg}." if pkg else ""
-            for m in f.message_type:
-                messages[f"{prefix}{m.name}"] = (pkg, m)
-            for e in f.enum_type:
-                enums[f"{prefix}{e.name}"] = (pkg, e)
-        return messages, enums
+            en.value.add(name=tokens[pos], number=int(tokens[pos + 2]))
+            skip_statement()
+        pos += 1
 
-    old_messages, old_enums = collect_definitions(old_fds)
-    new_messages, new_enums = collect_definitions(new_fds)
-
-    changes: list[dict[str, Any]] = []
-
-    def make_change(kind: str, location: str, old_val: Any = None, new_val: Any = None, breaking: bool = False, note: str = "") -> dict[str, Any]:
-        return {
-            "id": f"grpc:{location}:{kind}",
-            "surface": "grpc",
-            "kind": kind,
-            "location": location,
-            "old": old_val,
-            "new": new_val,
-            "breaking": breaking,
-            "note": note,
-        }
-
-    # Messages added / removed
-    for mname in sorted(new_messages.keys()):
-        if mname not in old_messages:
-            changes.append(make_change("message_added", mname, new_val=mname, breaking=False))
-
-    for mname in sorted(old_messages.keys()):
-        if mname not in new_messages:
-            changes.append(make_change("message_removed", mname, old_val=mname, breaking=True))
-
-    # Compare common messages by field numbers
-    for mname in sorted(set(old_messages.keys()) & set(new_messages.keys())):
-        pkg, old_m = old_messages[mname]
-        _, new_m = new_messages[mname]
-
-        old_fields = {f.number: f for f in old_m.field}
-        new_fields = {f.number: f for f in new_m.field}
-
-        all_numbers = sorted(set(old_fields.keys()) | set(new_fields.keys()))
-        for num in all_numbers:
-            loc = f"{mname}.{num}"
-            if num in old_fields and num not in new_fields:
-                changes.append(make_change("field_removed", loc, old_val=old_fields[num].name, breaking=True))
-            elif num in new_fields and num not in old_fields:
-                changes.append(make_change("field_added", loc, new_val=new_fields[num].name, breaking=False))
+    def parse_message(target, scope: str) -> None:
+        nonlocal pos
+        name = tokens[pos + 1]
+        msg = target.add(name=name)
+        inner = f"{scope}{name}."
+        pos += 3  # message <name> {
+        while tokens[pos] != "}":
+            tok = tokens[pos]
+            if tok == "message":
+                parse_message(msg.nested_type, inner)
+            elif tok == "enum":
+                parse_enum(msg.enum_type, inner)
+            elif tok in ("option", "reserved", "extensions"):
+                skip_statement()
+            elif tok in ("oneof", "map") or tokens[pos + 1] == "{":
+                skip_block() if tok == "oneof" else skip_statement()
             else:
-                of = old_fields[num]
-                nf = new_fields[num]
-                if of.name != nf.name:
-                    changes.append(make_change("field_renamed", loc, old_val=of.name, new_val=nf.name, breaking=True))
-                elif of.type != nf.type or of.type_name != nf.type_name:
-                    changes.append(make_change("field_type_changed", loc, old_val=of.type_name or str(of.type), new_val=nf.type_name or str(nf.type), breaking=True))
+                label = 1
+                if tok in ("optional", "repeated"):
+                    label = 3 if tok == "repeated" else 1
+                    pos += 1
+                ftype, fname, number = tokens[pos], tokens[pos + 1], int(tokens[pos + 3])
+                field = msg.field.add(name=fname, number=number, label=label)
+                if ftype in _SCALARS:
+                    field.type = _SCALARS[ftype]
+                else:
+                    fields_to_type.append((field, ftype))
+                skip_statement()
+        pos += 1
 
-    # Compare enums by value numbers
-    for ename in sorted(new_enums.keys()):
-        if ename not in old_enums:
-            changes.append(make_change("enum_added", ename, new_val=ename, breaking=False))
+    while pos < len(tokens):
+        tok = tokens[pos]
+        if tok == "package":
+            fdp.package = tokens[pos + 1]
+            skip_statement()
+        elif tok == "message":
+            parse_message(fdp.message_type, "")
+        elif tok == "enum":
+            parse_enum(fdp.enum_type, "")
+        elif tok == "service":
+            skip_block()
+        else:
+            skip_statement()
 
-    for ename in sorted(old_enums.keys()):
-        if ename not in new_enums:
-            changes.append(make_change("enum_removed", ename, old_val=ename, breaking=True))
+    prefix = f".{fdp.package}." if fdp.package else "."
+    for field, ftype in fields_to_type:
+        name = ftype.lstrip(".")
+        field.type = _TYPE_ENUM if name in enum_names or name.split(".")[-1] in enum_names else _TYPE_MESSAGE
+        field.type_name = ftype if ftype.startswith(".") else prefix + name
 
-    for ename in sorted(set(old_enums.keys()) & set(new_enums.keys())):
-        pkg, old_e = old_enums[ename]
-        _, new_e = new_enums[ename]
+    return descriptor_pb2.FileDescriptorSet(file=[fdp]).SerializeToString()
 
-        old_vals = {v.number: v for v in old_e.value}
-        new_vals = {v.number: v for v in new_e.value}
 
-        for num in sorted(set(old_vals.keys()) | set(new_vals.keys())):
-            loc = f"{ename}.{num}"
-            if num in old_vals and num not in new_vals:
-                changes.append(make_change("enum_value_removed", loc, old_val=old_vals[num].name, breaking=True))
-            elif num in new_vals and num not in old_vals:
-                changes.append(make_change("enum_value_added", loc, new_val=new_vals[num].name, breaking=False))
-            else:
-                ov = old_vals[num]
-                nv = new_vals[num]
-                if ov.name != nv.name:
-                    changes.append(make_change(
-                        "enum_value_renamed",
-                        loc,
-                        old_val=ov.name,
-                        new_val=nv.name,
-                        breaking=True,
-                        note="wire-compatible, source-breaking",
-                    ))
+def to_descriptor_set(text: str) -> bytes:
+    """compile_proto when grpc_tools is available, otherwise the pure-Python parser."""
+    try:
+        import grpc_tools  # noqa: F401, PLC0415
+    except ImportError:
+        return parse_proto_text(text)
+    return compile_proto(text)
 
+
+# ---------------------------------------------------------------------------
+# Diff
+# ---------------------------------------------------------------------------
+
+def _mk(location: str, kind: str, old, new, breaking: bool, note: str = "") -> dict:
+    return {
+        "id": f"grpc:{location}:{kind}",
+        "surface": "grpc",
+        "kind": kind,
+        "location": location,
+        "old": old,
+        "new": new,
+        "breaking": breaking,
+        "note": note,
+    }
+
+
+def _index(fds) -> tuple[dict, dict]:
+    """Messages and enums by "<package>.<Name>" (nested ones as "<package>.<Outer>.<Name>")."""
+    messages: dict = {}
+    enums: dict = {}
+
+    def walk(prefix: str, msgs, ens) -> None:
+        for en in ens:
+            enums[f"{prefix}{en.name}"] = en
+        for msg in msgs:
+            messages[f"{prefix}{msg.name}"] = msg
+            walk(f"{prefix}{msg.name}.", msg.nested_type, msg.enum_type)
+
+    for f in fds.file:
+        walk(f"{f.package}." if f.package else "", f.message_type, f.enum_type)
+    return messages, enums
+
+
+def diff_descriptor_sets(old: bytes, new: bytes) -> list[dict]:
+    """Compare two serialised FileDescriptorSets (never added to a descriptor pool)."""
+    from google.protobuf import descriptor_pb2  # noqa: PLC0415
+
+    old_msgs, old_enums = _index(descriptor_pb2.FileDescriptorSet.FromString(old))
+    new_msgs, new_enums = _index(descriptor_pb2.FileDescriptorSet.FromString(new))
+    changes: list[dict] = []
+
+    for qname in new_msgs.keys() - old_msgs.keys():
+        changes.append(_mk(qname, "message_added", None, qname, False))
+    for qname in old_msgs.keys() - new_msgs.keys():
+        changes.append(_mk(qname, "message_removed", qname, None, True))
+
+    for qname in old_msgs.keys() & new_msgs.keys():
+        old_fields = {f.number: f for f in old_msgs[qname].field}
+        new_fields = {f.number: f for f in new_msgs[qname].field}
+        for num, fld in old_fields.items():
+            loc = f"{qname}.{num}"
+            if num not in new_fields:
+                changes.append(_mk(loc, "field_removed", fld.name, None, True))
+                continue
+            nfld = new_fields[num]
+            if nfld.name != fld.name:
+                changes.append(_mk(loc, "field_renamed", fld.name, nfld.name, True))
+            if (nfld.type, nfld.type_name) != (fld.type, fld.type_name):
+                changes.append(_mk(loc, "field_type_changed", fld.name, nfld.name, True,
+                                   f"{fld.type_name or fld.type} -> {nfld.type_name or nfld.type}"))
+        for num in new_fields.keys() - old_fields.keys():
+            changes.append(_mk(f"{qname}.{num}", "field_added", None, new_fields[num].name, False))
+
+    for qname in new_enums.keys() - old_enums.keys():
+        changes.append(_mk(qname, "enum_added", None, qname, False))
+    for qname in old_enums.keys() - new_enums.keys():
+        changes.append(_mk(qname, "enum_removed", qname, None, True))
+
+    for qname in old_enums.keys() & new_enums.keys():
+        old_vals = {v.number: v for v in old_enums[qname].value}
+        new_vals = {v.number: v for v in new_enums[qname].value}
+        for num, val in old_vals.items():
+            loc = f"{qname}.{num}"
+            if num not in new_vals:
+                changes.append(_mk(loc, "enum_value_removed", val.name, None, True))
+            elif new_vals[num].name != val.name:
+                changes.append(_mk(loc, "enum_value_renamed", val.name, new_vals[num].name, True,
+                                   "wire-compatible, source-breaking"))
+        for num in new_vals.keys() - old_vals.keys():
+            changes.append(_mk(f"{qname}.{num}", "enum_value_added", None, new_vals[num].name, False))
+
+    changes.sort(key=lambda c: (c["location"], c["kind"]))
     return changes
 
 
-def diff_proto_texts(old_text: str, new_text: str) -> list[dict[str, Any]]:
-    return diff_descriptor_sets(compile_proto(old_text), compile_proto(new_text))
+def diff_proto_texts(old_text: str, new_text: str) -> list[dict]:
+    """Compile (or parse) both proto texts and diff the resulting descriptor sets."""
+    return diff_descriptor_sets(to_descriptor_set(old_text), to_descriptor_set(new_text))

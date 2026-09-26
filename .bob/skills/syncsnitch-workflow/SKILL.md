@@ -47,6 +47,13 @@ Automatic zero-friction demo run:
 4. UPSTREAM=`$W/<UPSTREAM_DIR>`, CONSUMER=`$W/<CONSUMER_DIR>`, CONSUMER_BASE=`<HEAD_REF>`, BRANCH=`syncsnitch/<RUN_ID>`,
    UPSTREAM_URL=`https://github.com/<REPO>/compare/<BASE_REF>...<HEAD_REF>`, UPSTREAM_REPO=`<REPO>`, PR_NUMBER=`-`.
 
+**Website mode (headless, no Bob IDE step)** - the SyncSnitch website (`web/webapp/agents.py`) is the orchestrator:
+someone pastes a GitHub link, the site runs S0-S2, clones the repo into `.syncsnitch/work/<RUN_ID>` on branch
+`syncsnitch/<RUN_ID>`, then starts each agent with IBM Bob Shell:
+`bob run --mode syncsnitch-tracer|syncsnitch-transformer|syncsnitch-verifier --format stream-json --max-cost <budget share> ...`
+with the S3/S4/S6 task text below (paths filled in). The site runs S5, shows S7 on the run page, and runs S8-S9 after the
+human approves there. In that mode an agent does only its own step and never asks questions.
+
 ## S1 - detect drift (deterministic, 0 tokens)
 `uv run syncsnitch detect --upstream <UPSTREAM> --base <BASE_REF> --head <HEAD_REF> --run-id <RUN_ID>`
 Success: prints the breaking changes and writes drift.json. If it reports 0 breaking changes: tell the user and stop.

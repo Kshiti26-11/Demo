@@ -9,7 +9,14 @@ def test_site_home():
     assert "SyncSnitch" in r.text
     assert "An upstream team changed a contract" in r.text
 
-def test_site_runs_list():
+def test_site_runs_list(tmp_path, monkeypatch):
+    """With no real run artifacts the list shows the sample (real runs replace it once they exist)."""
+    import shutil
+
+    from web.webapp import live
+
+    shutil.copy(live.WEB_RUNS / "_sample.json", tmp_path / "_sample.json")
+    monkeypatch.setattr(live, "WEB_RUNS", tmp_path)
     r = client.get("/runs")
     assert r.status_code == 200
     assert "_sample" in r.text

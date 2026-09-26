@@ -2,6 +2,8 @@
 
 Goal: the consumer (billing-service) must work against the upstream Orders contract v1 AND v2 at the same time
 (rolling deploys), with its own public API unchanged and the smallest possible diff.
+Variables come from the task: UPSTREAM (default ../orders-service), HEAD_REF (default origin/feat/orders-v2),
+BASE_REF (default main), UPSTREAM_REPO (default kshiti26-11/orders-service), PR_NUMBER, RUN_ID.
 
 ## Hard rules
 - Edit only files inside the consumer repository, on the syncsnitch/* branch you created. Never touch the upstream repo.
@@ -24,7 +26,7 @@ Goal: the consumer (billing-service) must work against the upstream Orders contr
    contract_entrypoints.py). After normalize_status the not-payable set is {"AWAITING_PAYMENT", "CANCELLED"} and the
    paid set is {"PAID", "SHIPPED"}.
 2. gRPC -> replace contracts/upstream/orders.proto with the upstream v2 proto
-   (`git -C ../orders-service show origin/feat/orders-v2:contracts/orders.proto`) BUT delete its two `reserved` lines and
+   (`git -C <UPSTREAM> show <HEAD_REF>:./contracts/orders.proto`) BUT delete its two `reserved` lines and
    re-declare the removed fields with their ORIGINAL numbers and types:
        string customer_name = 2 [deprecated = true];
        double total_price = 3 [deprecated = true];
@@ -35,12 +37,12 @@ Goal: the consumer (billing-service) must work against the upstream Orders contr
        WHERE status IN ('PAID', 'SHIPPED') GROUP BY day ORDER BY day
    In revenue.py first run `SELECT version_num FROM alembic_version`; use v2 when version_num >= "0002"
    (revenue is already minor units: int(revenue)); otherwise v1 (round-half-up(revenue x 100)). Same JSON output shape.
-4. Fixtures/tests -> keep tests/fixtures/order_v1_*.json. Add tests/fixtures/order_v2_paid.json and order_v2_unpaid.json
+4. Fixtures/tests -> keep the existing v1 fixtures (tests/fixtures/order_paid.json, order_unpaid.json). Add tests/fixtures/order_v2_paid.json and order_v2_unpaid.json
    copied from the "paid" / "unpaid" examples of the upstream v2 openapi.yaml
-   (`git -C ../orders-service show origin/feat/orders-v2:contracts/openapi.yaml`). Parametrize the unit tests over the v1 and
+   (`git -C <UPSTREAM> show <HEAD_REF>:./contracts/openapi.yaml`). Parametrize the unit tests over the v1 and
    v2 fixtures with identical expected results.
 5. Write <consumer>/.syncsnitch.json exactly:
-   {"upstream_repo": "kshiti26-11/orders-service", "upstream_pr": <PR_NUMBER>, "upstream_base": "main",
-    "upstream_head": "feat/orders-v2", "run_id": "<RUN_ID>"}
-6. Commit on the branch (do not push):
-   git add -A && git commit -m "fix(contract): tolerant reader for Orders API v2 (SyncSnitch <RUN_ID>)" -m "Bob-Session: P3-3"
+   {"upstream_repo": "<UPSTREAM_REPO>", "upstream_pr": <PR_NUMBER or null>, "upstream_base": "<BASE_REF>",
+    "upstream_head": "<HEAD_REF>", "run_id": "<RUN_ID>"}
+6. Commit on the branch (do not push), from inside the consumer folder so nothing outside it is staged:
+   git add -A . && git commit -m "fix(contract): tolerant reader for Orders API v2 (SyncSnitch <RUN_ID>)" -m "Bob-Session: P3-3"

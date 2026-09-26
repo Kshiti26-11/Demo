@@ -241,3 +241,22 @@ def test_verify_worktrees_cleanup_on_error(repos, tmp_path):
     # Worktrees should be removed
     assert not (runs_dir / "err-clean" / "upstream-v1").exists()
     assert not (runs_dir / "err-clean" / "upstream-v2").exists()
+
+
+def test_verify_v6_fails_when_an_existing_fixture_is_edited(repos, tmp_path):
+    """Editing the old examples (instead of adding new ones) can hide a broken v1 path: V6 must fail."""
+    upstream, consumer = repos
+    git = ["git", "-c", "user.name=test", "-c", "user.email=test@example.com"]
+    subprocess.run(["git", "checkout", "-q", "-b", "syncsnitch/x"], cwd=consumer, check=True)
+    fixture = consumer / "tests" / "fixtures" / "order_v2_paid.json"
+    fixture.write_text(fixture.read_text(encoding="utf-8").replace("1999", "2000"), encoding="utf-8")
+    (consumer / "tests" / "fixtures" / "order_v2_unpaid.json").write_text("{}", encoding="utf-8")  # adding is fine
+    subprocess.run([*git, "commit", "-qam", "edit the old fixture"], cwd=consumer, check=True)
+
+    main(["--run-id", "v6-fix", "--upstream", str(upstream), "--base", "main", "--head", "feat/v2",
+          "--consumer", str(consumer), "--consumer-base", "main", "--runs-dir", str(tmp_path / "runs"),
+          "--no-containers"], runner=FakeRunner())
+    data = json.loads((tmp_path / "runs" / "v6-fix" / "verification.json").read_text(encoding="utf-8"))
+    v6 = {c["id"]: c for c in data["checks"]}["V6"]
+    assert v6["status"] == "fail" and "existing fixtures edited" in v6["details"]
+    assert "tests/fixtures/order_v2_paid.json" in v6["details"] and "order_v2_unpaid" not in v6["details"]

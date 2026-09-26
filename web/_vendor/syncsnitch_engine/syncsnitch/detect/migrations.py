@@ -1,168 +1,136 @@
+"""DB/Alembic migration drift detection (ast on each file's upgrade() only)."""
+from __future__ import annotations
+
 import ast
-from pathlib import Path
 import re
-from typing import Any
+
+_VALUE_RENAME = re.compile(
+    r"UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*'([^']*)'\s+WHERE\s+\2\s*=\s*'([^']*)'\s*;?\s*$",
+    re.IGNORECASE,
+)
 
 
-def diff_migrations(files: list[tuple[str, str]]) -> list[dict[str, Any]]:
-    changes: list[dict[str, Any]] = []
-
-    def make_change(kind: str, location: str, old_val: Any = None, new_val: Any = None, breaking: bool = False, note: str = "") -> dict[str, Any]:
-        return {
-            "id": f"db:{location}:{kind}",
-            "surface": "db",
-            "kind": kind,
-            "location": location,
-            "old": old_val,
-            "new": new_val,
-            "breaking": breaking,
-            "note": note,
-        }
-
-    update_regex = re.compile(
-        r"UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*['\"]([^'\"]+)['\"]\s+WHERE\s+(\w+)\s*=\s*['\"]([^'\"]+)['\"]",
-        re.IGNORECASE,
-    )
-
-    for filename, content in files:
-        file_path_str = Path(filename).name
-        try:
-            tree = ast.parse(content)
-        except Exception:
-            continue
-
-        # Find upgrade function
-        upgrade_func = None
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "upgrade":
-                upgrade_func = node
-                break
-
-        if not upgrade_func:
-            continue
-
-        for stmt in ast.walk(upgrade_func):
-            # Check for with op.batch_alter_table('<table>') as batch_op:
-            if isinstance(stmt, ast.With):
-                for item in stmt.items:
-                    expr = item.context_expr
-                    batch_var_name = item.optional_vars.id if isinstance(item.optional_vars, ast.Name) else None
-                    table_name = None
-                    if isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute):
-                        if expr.func.attr == "batch_alter_table" and expr.args:
-                            first_arg = expr.args[0]
-                            if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
-                                table_name = first_arg.value
-
-                    if table_name and batch_var_name:
-                        for body_stmt in stmt.body:
-                            for call_node in ast.walk(body_stmt):
-                                if isinstance(call_node, ast.Call) and isinstance(call_node.func, ast.Attribute):
-                                    if isinstance(call_node.func.value, ast.Name) and call_node.func.value.id == batch_var_name:
-                                        _handle_table_call(call_node, table_name, file_path_str, changes, make_change)
-
-            # Direct op.xxx calls
-            elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                call_node = stmt.value
-                if isinstance(call_node.func, ast.Attribute) and isinstance(call_node.func.value, ast.Name) and call_node.func.value.id == "op":
-                    attr = call_node.func.attr
-                    if attr == "execute" and call_node.args:
-                        arg0 = call_node.args[0]
-                        if isinstance(arg0, ast.Constant) and isinstance(arg0.value, str):
-                            sql = arg0.value.strip()
-                            m = update_regex.match(sql)
-                            if m:
-                                tbl, col_set, val_new, col_where, val_old = m.groups()
-                                changes.append(make_change(
-                                    "value_renamed",
-                                    f"{tbl}.{col_where}.{val_old}",
-                                    old_val=val_old,
-                                    new_val=val_new,
-                                    breaking=True,
-                                ))
-                            else:
-                                line = stmt.lineno
-                                changes.append(make_change(
-                                    "data_update",
-                                    f"{file_path_str}:{line}",
-                                    breaking=False,
-                                ))
-                    elif attr in ("add_column", "drop_column", "alter_column") and call_node.args:
-                        arg0 = call_node.args[0]
-                        if isinstance(arg0, ast.Constant) and isinstance(arg0.value, str):
-                            table_name = arg0.value
-                            # Shift args so remainder looks like batch_op call
-                            _handle_direct_op_call(call_node, table_name, changes, make_change)
-
-    return changes
-
-
-def _extract_column_name(arg_node: ast.AST) -> str | None:
-    if isinstance(arg_node, ast.Constant) and isinstance(arg_node.value, str):
-        return arg_node.value
-    if isinstance(arg_node, ast.Call):
-        # sa.Column("name", ...) or Column("name", ...)
-        if arg_node.args and isinstance(arg_node.args[0], ast.Constant) and isinstance(arg_node.args[0].value, str):
-            return arg_node.args[0].value
-        for kw in arg_node.keywords:
-            if kw.arg == "name" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                return kw.value.value
+def _str(node: ast.expr | None) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
     return None
 
 
-def _handle_table_call(call_node: ast.Call, table_name: str, file_path_str: str, changes: list, make_change):
-    attr = call_node.func.attr
-    if attr == "add_column" and call_node.args:
-        col = _extract_column_name(call_node.args[0])
-        if col:
-            changes.append(make_change(
-                "column_added",
-                f"{table_name}.{col}",
-                new_val=col,
-                breaking=False,
-            ))
-    elif attr == "drop_column" and call_node.args:
-        col = _extract_column_name(call_node.args[0])
-        if col:
-            changes.append(make_change(
-                "column_dropped",
-                f"{table_name}.{col}",
-                old_val=col,
-                breaking=True,
-            ))
-    elif attr == "alter_column" and call_node.args:
-        col = _extract_column_name(call_node.args[0])
-        new_name = None
-        for kw in call_node.keywords:
-            if kw.arg == "new_column_name" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                new_name = kw.value.value
-                break
-        if col and new_name:
-            changes.append(make_change(
-                "column_renamed",
-                f"{table_name}.{col}",
-                old_val=col,
-                new_val=new_name,
-                breaking=True,
-            ))
+def _kw(call: ast.Call, name: str) -> str | None:
+    for kw in call.keywords:
+        if kw.arg == name:
+            return _str(kw.value)
+    return None
 
 
-def _handle_direct_op_call(call_node: ast.Call, table_name: str, changes: list, make_change):
-    attr = call_node.func.attr
-    if attr == "add_column" and len(call_node.args) > 1:
-        col = _extract_column_name(call_node.args[1])
-        if col:
-            changes.append(make_change("column_added", f"{table_name}.{col}", new_val=col, breaking=False))
-    elif attr == "drop_column" and len(call_node.args) > 1:
-        col = _extract_column_name(call_node.args[1])
-        if col:
-            changes.append(make_change("column_dropped", f"{table_name}.{col}", old_val=col, breaking=True))
-    elif attr == "alter_column" and len(call_node.args) > 1:
-        col = _extract_column_name(call_node.args[1])
-        new_name = None
-        for kw in call_node.keywords:
-            if kw.arg == "new_column_name" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                new_name = kw.value.value
-                break
-        if col and new_name:
-            changes.append(make_change("column_renamed", f"{table_name}.{col}", old_val=col, new_val=new_name, breaking=True))
+def _column_name(node: ast.expr) -> str | None:
+    """Name from sa.Column("name", ...) / Column("name", ...)."""
+    if isinstance(node, ast.Call) and node.args:
+        func = node.func
+        if (isinstance(func, ast.Attribute) and func.attr == "Column") or (
+            isinstance(func, ast.Name) and func.id == "Column"
+        ):
+            return _str(node.args[0])
+    return None
+
+
+def _change(kind: str, location: str, old, new, breaking: bool, note: str = "") -> dict:
+    return {
+        "id": f"db:{location}:{kind}",
+        "surface": "db",
+        "kind": kind,
+        "location": location,
+        "old": old,
+        "new": new,
+        "breaking": breaking,
+        "note": note,
+    }
+
+
+def _batch_table(node: ast.With) -> tuple[str, str] | None:
+    """(alias, table) for "with op.batch_alter_table('<table>') as batch_op:"."""
+    for item in node.items:
+        ctx = item.context_expr
+        if (
+            isinstance(ctx, ast.Call)
+            and isinstance(ctx.func, ast.Attribute)
+            and ctx.func.attr == "batch_alter_table"
+            and isinstance(item.optional_vars, ast.Name)
+        ):
+            table = _str(ctx.args[0]) if ctx.args else _kw(ctx, "table_name")
+            if table:
+                return item.optional_vars.id, table
+    return None
+
+
+def _parse_file(filename: str, source: str) -> list[dict]:
+    tree = ast.parse(source)
+    upgrade = next(
+        (n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "upgrade"),
+        None,
+    )
+    if upgrade is None:
+        return []
+
+    changes: list[dict] = []
+
+    def handle_call(call: ast.Call, batches: dict[str, str]) -> None:
+        func = call.func
+        if not (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)):
+            return
+        receiver, method = func.value.id, func.attr
+        if receiver in batches:  # batch_op.<method>(...) - the table comes from the with-block
+            table, args = batches[receiver], list(call.args)
+        elif receiver == "op":  # op.<method>(<table>, ...)
+            table, args = _str(call.args[0]) if call.args else None, list(call.args[1:])
+        else:
+            return
+
+        if method == "add_column" and table and args:
+            col = _column_name(args[0])
+            if col:
+                changes.append(_change("column_added", f"{table}.{col}", None, col, False))
+        elif method == "drop_column" and table and args:
+            col = _str(args[0])
+            if col:
+                changes.append(_change("column_dropped", f"{table}.{col}", col, None, True))
+        elif method == "alter_column" and table and args:
+            col, new_name = _str(args[0]), _kw(call, "new_column_name")
+            if col and new_name:
+                changes.append(_change("column_renamed", f"{table}.{col}", col, new_name, True))
+        elif method == "execute" and receiver == "op":
+            sql = _str(call.args[0]) if call.args else None
+            match = _VALUE_RENAME.search(sql.strip()) if sql else None
+            if match:
+                tbl, col, new_val, old_val = match.groups()
+                changes.append(_change("value_renamed", f"{tbl}.{col}.{old_val}", old_val, new_val, True))
+            else:
+                changes.append(_change("data_update", f"{filename}:{call.lineno}", None, sql, False))
+
+    def walk(stmts: list[ast.stmt], batches: dict[str, str]) -> None:
+        for stmt in stmts:
+            if isinstance(stmt, ast.With):
+                found = _batch_table(stmt)
+                walk(stmt.body, {**batches, found[0]: found[1]} if found else batches)
+            elif isinstance(stmt, (ast.If, ast.For, ast.While, ast.Try)):
+                for block in ("body", "orelse", "finalbody"):
+                    walk(getattr(stmt, block, []) or [], batches)
+                for handler in getattr(stmt, "handlers", []) or []:
+                    walk(handler.body, batches)
+            elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                handle_call(stmt.value, batches)
+
+    walk(upgrade.body, {})
+    return changes
+
+
+def diff_migrations(files: list[tuple[str, str]] | list[str]) -> list[dict]:
+    """
+    Changes from the upgrade() of every migration file, in order.
+    ``files`` is a list of (file name, source) tuples; plain source strings are accepted too.
+    """
+    changes: list[dict] = []
+    for i, item in enumerate(files):
+        name, source = item if isinstance(item, tuple) else (f"migration_{i}.py", item)
+        changes.extend(_parse_file(name.rsplit("/", 1)[-1], source))
+    return changes

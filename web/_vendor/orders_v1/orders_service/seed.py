@@ -1,32 +1,36 @@
-﻿import json
-from datetime import UTC, datetime
-from decimal import Decimal
+import json
+import decimal
+import datetime
 from pathlib import Path
-from sqlalchemy.orm import Session
-from .config import database_url
-from .db import make_engine, make_sessionmaker
+
 from .models import Order
 
-def seed(session: Session) -> None:
+
+_SEED_FILE = Path(__file__).parent / "seed.json"
+
+
+def seed(session) -> None:
     session.query(Order).delete()
-    seed_path = Path(__file__).parent / "seed.json"
-    with open(seed_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    for item in data["orders"]:
-        dt_str = item["created_at"].replace("Z", "+00:00")
-        dt = datetime.fromisoformat(dt_str).astimezone(UTC)
+    data = json.loads(_SEED_FILE.read_text())
+    for row in data["orders"]:
         order = Order(
-            order_id=item["order_id"],
-            customer_name=item["customer_name"],
-            total_price=Decimal(item["amount_minor"]) / Decimal(100),
-            status=item["status_v1"],
-            created_at=dt,
+            order_id=row["order_id"],
+            customer_name=row["customer_name"],
+            total_price=decimal.Decimal(row["amount_minor"]) / 100,
+            status=row["status_v1"],
+            created_at=datetime.datetime.fromisoformat(
+                row["created_at"].replace("Z", "+00:00")
+            ),
         )
         session.add(order)
     session.commit()
 
+
 if __name__ == "__main__":
-    engine = make_engine(database_url())
-    SessionLocal = make_sessionmaker(engine)
-    with SessionLocal() as s:
+    from . import config
+    from .db import make_engine, make_sessionmaker
+
+    engine = make_engine(config.database_url())
+    Session = make_sessionmaker(engine)
+    with Session() as s:
         seed(s)

@@ -34,10 +34,16 @@ def main() -> int:
         return 0
     if not ACTIVE.exists():
         return 0
+    # ACTIVE may list extra upstream folders to protect, one per line (link mode: /syncsnitch <site link>)
+    protected = ["orders-service"] + [
+        line.strip().replace("\\", "/").lower().rstrip("/")
+        for line in ACTIVE.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if line.strip()
+    ]
     for path in paths_in(event):
         norm = path.replace("\\", "/").lower()
         name = norm.rsplit("/", 1)[-1]
-        if "orders-service" in norm or any(marker in name for marker in SECRET_MARKERS):
+        if any(p in norm for p in protected) or any(marker in name for marker in SECRET_MARKERS):
             reason = f"SyncSnitch guard: writing {path} is blocked during a run (upstream repo or secret)"
             print(json.dumps({"decision": "block", "reason": reason}))
             print(reason, file=sys.stderr)

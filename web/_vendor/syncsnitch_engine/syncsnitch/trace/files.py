@@ -1,96 +1,45 @@
-from pathlib import Path
+"""File-type specific scanners: SQL, proto, JSON fixtures (whole-word, line by line)."""
+from __future__ import annotations
+
 import re
-from typing import Any
+from pathlib import Path
 
 
-def scan_sql_file(path: Path, relative_path: str, token_map: dict[str, list[str]], py_contents: dict[str, str], resolver: Any) -> list[dict[str, Any]]:
-    try:
-        content = path.read_text(encoding="utf-8")
-    except Exception:
-        return []
-
-    sql_filename = path.name
-    # Find any symbol in python files that mentions this sql filename
-    referencing_symbols = set()
-    for py_file, py_text in py_contents.items():
-        if sql_filename in py_text:
-            # Simple scan for function or assignment names in that file
-            for line in py_text.splitlines():
-                m_def = re.match(r"^\s*(?:async\s+)?def\s+([A-Za-z0-9_]+)", line)
-                if m_def:
-                    referencing_symbols.add(m_def.group(1))
-                m_assign = re.match(r"^([A-Za-z0-9_]+)\s*=", line)
-                if m_assign:
-                    referencing_symbols.add(m_assign.group(1))
-
-    # Resolve endpoints for those symbols
-    endpoints = set()
-    for sym in referencing_symbols:
-        for ep in resolver(sym, ""):
-            endpoints.add(ep)
-    sorted_endpoints = sorted(endpoints)
-
-    hits: list[dict[str, Any]] = []
-    lines = content.splitlines()
-    for idx, line in enumerate(lines, start=1):
-        for token in token_map:
-            if re.search(rf"\b{re.escape(token)}\b", line):
+def _scan_lines(
+    source: str,
+    file_path: str,
+    tokens: dict[str, list[str]],
+    usage_kind: str,
+    pattern: str,
+) -> list[dict]:
+    hits: list[dict] = []
+    for lineno, line in enumerate(source.splitlines(), start=1):
+        for tok, change_ids in tokens.items():
+            if re.search(pattern.format(re.escape(tok)), line):
                 hits.append({
-                    "file": Path(relative_path).as_posix(),
-                    "line": idx,
-                    "token": token,
-                    "change_ids": token_map[token],
-                    "usage_kind": "sql_column",
-                    "symbol": path.stem,
-                    "endpoints": sorted_endpoints,
-                    "in_tests": Path(relative_path).as_posix().startswith("tests/"),
-                })
-    return hits
-
-
-def scan_proto_file(path: Path, relative_path: str, token_map: dict[str, list[str]]) -> list[dict[str, Any]]:
-    try:
-        content = path.read_text(encoding="utf-8")
-    except Exception:
-        return []
-
-    hits: list[dict[str, Any]] = []
-    lines = content.splitlines()
-    for idx, line in enumerate(lines, start=1):
-        for token in token_map:
-            if re.search(rf"\b{re.escape(token)}\b", line):
-                hits.append({
-                    "file": Path(relative_path).as_posix(),
-                    "line": idx,
-                    "token": token,
-                    "change_ids": token_map[token],
-                    "usage_kind": "proto_field",
-                    "symbol": path.stem,
+                    "file": file_path,
+                    "line": lineno,
+                    "token": tok,
+                    "change_ids": change_ids,
+                    "usage_kind": usage_kind,
+                    "symbol": Path(file_path).name,
                     "endpoints": [],
-                    "in_tests": Path(relative_path).as_posix().startswith("tests/"),
+                    "in_tests": file_path.startswith("tests/"),
                 })
     return hits
 
 
-def scan_json_fixture_file(path: Path, relative_path: str, token_map: dict[str, list[str]]) -> list[dict[str, Any]]:
-    try:
-        content = path.read_text(encoding="utf-8")
-    except Exception:
-        return []
+def scan_sql_file(source: str, file_path: str, tokens: dict[str, list[str]]) -> list[dict]:
+    """*.sql: whole-word column/value matches."""
+    return _scan_lines(source, file_path, tokens, "sql_column", r"\b{}\b")
 
-    hits: list[dict[str, Any]] = []
-    lines = content.splitlines()
-    for idx, line in enumerate(lines, start=1):
-        for token in token_map:
-            if f'"{token}"' in line:
-                hits.append({
-                    "file": Path(relative_path).as_posix(),
-                    "line": idx,
-                    "token": token,
-                    "change_ids": token_map[token],
-                    "usage_kind": "fixture",
-                    "symbol": path.stem,
-                    "endpoints": [],
-                    "in_tests": True,
-                })
-    return hits
+
+def scan_proto_file(source: str, file_path: str, tokens: dict[str, list[str]]) -> list[dict]:
+    """*.proto: field and enum-value names (comments ignored)."""
+    code = "\n".join(line.split("//", 1)[0] for line in source.splitlines())
+    return _scan_lines(code, file_path, tokens, "proto_field", r"\b{}\b")
+
+
+def scan_json_fixture(source: str, file_path: str, tokens: dict[str, list[str]]) -> list[dict]:
+    """tests/**/*.json: lines containing the quoted token (a key or a string value)."""
+    return _scan_lines(source, file_path, tokens, "fixture", r'"{}"')

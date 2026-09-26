@@ -1,40 +1,56 @@
-from datetime import UTC, datetime
-from pathlib import Path
+"""Git utility functions for SyncSnitch (read-only / engine-support only).
+
+Every path is relative to the directory passed as ``repo``. That directory may be a repository root
+(separate orders-service / billing-service repos) or a sub-folder of a monorepo (kshiti26-11/demo with
+orders-service/ and billing-service/ inside it): ``git show <sha>:./<path>`` and ``git diff --relative``
+resolve paths against the working directory instead of the repository root.
+"""
+from __future__ import annotations
+
 import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
 
 
 def run(args: list[str], cwd: str | Path | None = None) -> str:
-    res = subprocess.run(args, cwd=cwd, check=True, text=True, capture_output=True)
-    return res.stdout
+    """Run a command (check=True) and return its stdout."""
+    result = subprocess.run(
+        args,
+        cwd=str(cwd) if cwd else None,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
 
 
 def resolve_ref(repo: str | Path, ref: str) -> str:
-    try:
-        out = run(["git", "-C", str(repo), "rev-parse", "--verify", f"{ref}^{{commit}}"])
-        return out.strip()
-    except subprocess.CalledProcessError:
-        out = run(["git", "-C", str(repo), "rev-parse", "--verify", f"origin/{ref}^{{commit}}"])
-        return out.strip()
+    """Resolve a branch, tag or sha to a commit sha (tries <ref>, then origin/<ref>)."""
+    for candidate in (ref, f"origin/{ref}"):
+        try:
+            return run(["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"], cwd=repo).strip()
+        except subprocess.CalledProcessError:
+            continue
+    raise ValueError(f"cannot resolve git ref {ref!r} in {repo}")
 
 
 def show_file(repo: str | Path, sha: str, path: str) -> str | None:
-    # Use forward slashes for git path
-    posix_path = Path(path).as_posix()
+    """Return the file content at <sha>, or None when the file does not exist there."""
     try:
-        return run(["git", "-C", str(repo), "show", f"{sha}:{posix_path}"])
+        return run(["git", "show", f"{sha}:./{path}"], cwd=repo)
     except subprocess.CalledProcessError:
         return None
 
 
 def added_files(repo: str | Path, base_sha: str, head_sha: str, pathspec: str) -> list[str]:
-    posix_spec = Path(pathspec).as_posix()
-    try:
-        out = run(["git", "-C", str(repo), "diff", "--name-only", "--diff-filter=A", base_sha, head_sha, "--", posix_spec])
-        lines = [line.strip() for line in out.splitlines() if line.strip()]
-        return lines
-    except subprocess.CalledProcessError:
-        return []
+    """Paths (relative to ``repo``) of files ADDED between base and head that match ``pathspec``."""
+    out = run(
+        ["git", "diff", "--relative", "--name-only", "--diff-filter=A", base_sha, head_sha, "--", pathspec],
+        cwd=repo,
+    )
+    return sorted(p.strip() for p in out.splitlines() if p.strip())
 
 
 def new_run_id() -> str:
-    return "r-" + datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    """Return a new run ID in the format r-YYYYMMDD-HHMMSS (UTC)."""
+    return datetime.now(tz=timezone.utc).strftime("r-%Y%m%d-%H%M%S")

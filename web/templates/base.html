@@ -11,23 +11,30 @@
   </script>
 </head>
 <body>
-  <header>
-    <nav>
-      <a href="/" class="brand">🕵️ SyncSnitch</a>
-      <ul class="nav-links">
-        <li><a href="/">Home</a></li>
-        <li><a href="/runs">Runs</a></li>
-        <li><a href="/matrix">Matrix</a></li>
-        <li><a href="/try">Try it</a></li>
-        <li><a href="https://github.com/kshiti26-11/demo" target="_blank" rel="noreferrer">GitHub</a></li>
-      </ul>
-    </nav>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <div class="brand-block">
+        <div class="brand-row">
+          <a href="/" class="brand" aria-label="SyncSnitch home">🕵️ <span class="brand-text">SyncSnitch</span></a>
+          <span class="hbadge hbadge-live" title="This site is serving from {{ request.url.netloc }}"><i class="dot"></i>{{ live_badge(request) }}</span>
+          <span class="hbadge hbadge-bob">IBM Bob 2.0</span>
+        </div>
+        <p class="brand-sub">Autonomous, human-gated contract-drift agent for distributed systems.</p>
+      </div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="/runs">Runs Replay</a>
+        <a href="/matrix">Live Matrix</a>
+        <a href="/try">Try-It Sandbox</a>
+        <a href="/analyze">Repo Analyzer</a>
+        <a href="https://github.com/kshiti26-11/demo" target="_blank" rel="noreferrer">GitHub ↗</a>
+      </nav>
+    </div>
   </header>
   <main>
     {% block content %}{% endblock %}
   </main>
   <footer>
-    <p>Built with IBM Bob · evidence in <a href="https://github.com/kshiti26-11/demo/tree/main/bob_sessions" target="_blank" style="color:var(--accent);">bob_sessions/</a></p>
+    <p>Built with IBM Bob · evidence in <a href="https://github.com/kshiti26-11/demo/tree/main/bob_sessions" target="_blank" rel="noreferrer" style="color:var(--accent);">bob_sessions/</a></p>
   </footer>
 </body>
 </html>

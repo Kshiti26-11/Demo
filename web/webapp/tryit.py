@@ -27,7 +27,7 @@ def run(scenario: str) -> dict:
         mig_files = [(f.name, f.read_text(encoding="utf-8")) for f in s_dir.glob("*.py")]
         changes = migrations_mod.diff_migrations(mig_files)
 
-    consumer_dir = Path(__file__).resolve().parent.parent / "_vendor" / "billing_before" / "billing"
+    consumer_dir = Path(__file__).resolve().parent.parent / "_vendor" / "billing_before"
     trace_mod = importlib.import_module("syncsnitch_engine.trace")
     hits = trace_mod.trace_consumer(changes, consumer_dir)
     return {"changes": changes, "hits": hits}

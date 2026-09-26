@@ -1,231 +1,138 @@
+"""Python AST scanner: usages of changed contract tokens, plus the route/reference graph used for endpoints."""
+from __future__ import annotations
+
 import ast
-from collections import defaultdict
-from pathlib import Path
 import re
-from typing import Any
+from dataclasses import dataclass, field
+
+_HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
-class SymbolVisitor(ast.NodeVisitor):
-    def __init__(self, filename: str):
-        self.filename = filename
-        self.scope_stack: list[str] = []
-        self.routes: dict[str, str] = {}  # symbol_name -> "METHOD /path"
-        self.references: dict[str, set[str]] = defaultdict(set)  # symbol_name -> set of referenced names
-        self.current_symbol: str = "<module>"
+@dataclass
+class PyFileIndex:
+    """What one .py file contributes to the consumer-wide graph."""
 
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        self._handle_func(node)
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        self._handle_func(node)
-
-    def _handle_func(self, node: ast.FunctionDef | ast.AsyncFunctionDef):
-        # Check decorators for route: @app.get("/path"), @router.post("/path"), etc.
-        for dec in node.decorator_list:
-            if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
-                attr = dec.func.attr.lower()
-                if attr in ("get", "post", "put", "patch", "delete") and dec.args:
-                    arg0 = dec.args[0]
-                    if isinstance(arg0, ast.Constant) and isinstance(arg0.value, str):
-                        self.routes[node.name] = f"{attr.upper()} {arg0.value}"
-
-        prev_symbol = self.current_symbol
-        self.current_symbol = node.name
-        self.scope_stack.append(node.name)
-        self.generic_visit(node)
-        self.scope_stack.pop()
-        self.current_symbol = prev_symbol
-
-    def visit_ClassDef(self, node: ast.ClassDef):
-        prev_symbol = self.current_symbol
-        self.current_symbol = node.name
-        self.scope_stack.append(node.name)
-        self.generic_visit(node)
-        self.scope_stack.pop()
-        self.current_symbol = prev_symbol
-
-    def visit_Assign(self, node: ast.Assign):
-        # Module-level assignments: NAME = ...
-        if not self.scope_stack:
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    prev = self.current_symbol
-                    self.current_symbol = target.id
-                    self.visit(node.value)
-                    self.current_symbol = prev
-                    return
-        self.generic_visit(node)
-
-    def visit_Name(self, node: ast.Name):
-        if self.current_symbol:
-            self.references[self.current_symbol].add(node.id)
-        self.generic_visit(node)
-
-    def visit_Attribute(self, node: ast.Attribute):
-        if self.current_symbol:
-            self.references[self.current_symbol].add(node.attr)
-        self.generic_visit(node)
+    hits: list[dict] = field(default_factory=list)
+    routes: dict[str, list[str]] = field(default_factory=dict)  # function name -> ["METHOD /path"]
+    references: dict[str, set[str]] = field(default_factory=dict)  # symbol -> names it references
+    constants: list[tuple[str, str]] = field(default_factory=list)  # (symbol, string constant)
 
 
-class TokenVisitor(ast.NodeVisitor):
-    def __init__(self, token_map: dict[str, list[str]], filename: str, endpoint_resolver: Any):
-        self.token_map = token_map  # token -> list[change_id]
-        self.filename = filename
-        self.endpoint_resolver = endpoint_resolver
-        self.scope_stack: list[str] = []
-        self.module_assign_target: str | None = None
-        self.hits: list[dict[str, Any]] = []
-
-    def _get_symbol(self) -> str:
-        if self.scope_stack:
-            return self.scope_stack[-1]
-        if self.module_assign_target:
-            return self.module_assign_target
-        return "<module>"
-
-    def _add_hit(self, line: int, token: str, usage_kind: str):
-        if token in self.token_map:
-            sym = self._get_symbol()
-            endpoints = self.endpoint_resolver(sym, self.filename)
-            self.hits.append({
-                "file": Path(self.filename).as_posix(),
-                "line": line,
-                "token": token,
-                "change_ids": self.token_map[token],
-                "usage_kind": usage_kind,
-                "symbol": sym,
-                "endpoints": endpoints,
-                "in_tests": Path(self.filename).as_posix().startswith("tests/"),
-            })
-
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        self.scope_stack.append(node.name)
-        self.generic_visit(node)
-        self.scope_stack.pop()
-
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        self.scope_stack.append(node.name)
-        self.generic_visit(node)
-        self.scope_stack.pop()
-
-    def visit_ClassDef(self, node: ast.ClassDef):
-        self.scope_stack.append(node.name)
-        self.generic_visit(node)
-        self.scope_stack.pop()
-
-    def visit_Assign(self, node: ast.Assign):
-        if not self.scope_stack:
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    self.module_assign_target = target.id
-                    break
-        self.generic_visit(node)
-        self.module_assign_target = None
-
-    def visit_AnnAssign(self, node: ast.AnnAssign):
-        if isinstance(node.target, ast.Name):
-            tok = node.target.id
-            if tok in self.token_map:
-                self._add_hit(node.lineno, tok, "model_field")
-        self.generic_visit(node)
-
-    def visit_Subscript(self, node: ast.Subscript):
-        if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
-            tok = node.slice.value
-            if tok in self.token_map:
-                self._add_hit(node.lineno, tok, "subscript")
-                # Avoid matching slice again as generic literal
-                self.visit(node.value)
-                return
-        self.generic_visit(node)
-
-    def visit_Call(self, node: ast.Call):
-        # .get("<token>")
-        if isinstance(node.func, ast.Attribute) and node.func.attr == "get" and node.args:
-            first_arg = node.args[0]
-            if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
-                tok = first_arg.value
-                if tok in self.token_map:
-                    self._add_hit(node.lineno, tok, "get_call")
-                    self.visit(node.func.value)
-                    for a in node.args[1:]:
-                        self.visit(a)
-                    for kw in node.keywords:
-                        self.visit(kw)
-                    return
-
-        # Keyword arguments: foo(token=...)
-        for kw in node.keywords:
-            if kw.arg and kw.arg in self.token_map:
-                self._add_hit(node.lineno, kw.arg, "keyword")
-        self.generic_visit(node)
-
-    def visit_Attribute(self, node: ast.Attribute):
-        if node.attr in self.token_map:
-            self._add_hit(node.lineno, node.attr, "attribute")
-        self.generic_visit(node)
-
-    def visit_Constant(self, node: ast.Constant):
-        if isinstance(node.value, str):
-            text = node.value
-            if text in self.token_map:
-                self._add_hit(node.lineno, text, "literal")
-            else:
-                for tok in self.token_map:
-                    if len(tok) < len(text) and re.search(rf"\b{re.escape(tok)}\b", text):
-                        self._add_hit(node.lineno, tok, "embedded_text")
-        self.generic_visit(node)
+def _route(deco: ast.expr) -> str | None:
+    if (
+        isinstance(deco, ast.Call)
+        and isinstance(deco.func, ast.Attribute)
+        and deco.func.attr.lower() in _HTTP_METHODS
+        and deco.args
+        and isinstance(deco.args[0], ast.Constant)
+        and isinstance(deco.args[0].value, str)
+    ):
+        return f"{deco.func.attr.upper()} {deco.args[0].value}"
+    return None
 
 
-def build_endpoint_resolver(file_contents: dict[str, str]):
-    """Build cross-file reference graph and return a function resolver(symbol, filename) -> list[str]."""
-    all_routes: dict[str, str] = {}  # symbol -> route string
-    callers: dict[str, set[str]] = defaultdict(set)  # referenced_name -> set of caller symbol names
-
-    for path, content in file_contents.items():
-        try:
-            tree = ast.parse(content, filename=path)
-        except Exception:
-            continue
-        vis = SymbolVisitor(path)
-        vis.visit(tree)
-        for sym, route in vis.routes.items():
-            all_routes[sym] = route
-        for caller, referenced in vis.references.items():
-            for ref in referenced:
-                callers[ref].add(caller)
-
-    def resolve(symbol: str, filename: str) -> list[str]:
-        routes_found = set()
-        if symbol in all_routes:
-            routes_found.add(all_routes[symbol])
-
-        # BFS up to 3 hops
-        visited = {symbol}
-        current_level = {symbol}
-        for hop in range(3):
-            next_level = set()
-            for s in current_level:
-                for parent in callers.get(s, []):
-                    if parent in all_routes:
-                        routes_found.add(all_routes[parent])
-                    if parent not in visited:
-                        visited.add(parent)
-                        next_level.add(parent)
-            current_level = next_level
-
-        return sorted(routes_found)
-
-    return resolve
+def _names_used(node: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name):
+            names.add(child.id)
+        elif isinstance(child, ast.Attribute):
+            names.add(child.attr)
+    return names
 
 
-def scan_python_file(path: Path, relative_path: str, token_map: dict[str, list[str]], resolver: Any) -> list[dict[str, Any]]:
+def scan_python_file(source: str, file_path: str, tokens: dict[str, list[str]]) -> PyFileIndex:
+    """
+    Hits for every token (usage kinds: subscript, get_call, attribute, model_field, keyword, literal,
+    embedded_text) plus routes, references and string constants for the consumer-wide endpoint graph.
+    ``tokens`` maps token -> change ids. Hit endpoints are filled in later by trace_consumer.
+    """
+    index = PyFileIndex()
     try:
-        content = path.read_text(encoding="utf-8")
-        tree = ast.parse(content, filename=relative_path)
-    except Exception:
-        return []
+        tree = ast.parse(source, filename=file_path)
+    except SyntaxError:
+        return index
 
-    visitor = TokenVisitor(token_map, relative_path, resolver)
-    visitor.visit(tree)
-    return visitor.hits
+    parents: dict[int, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[id(child)] = node
+
+    module_symbols: dict[int, str] = {}  # top-level "NAME = ..." statements
+    for stmt in tree.body:
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target] if isinstance(stmt, ast.AnnAssign) else []
+        names = [t.id for t in targets if isinstance(t, ast.Name)]
+        if names:
+            module_symbols[id(stmt)] = names[0]
+            index.references.setdefault(names[0], set()).update(_names_used(stmt.value) if stmt.value else set())
+
+    def symbol_of(node: ast.AST) -> str:
+        current = node
+        while id(current) in parents:
+            parent = parents[id(current)]
+            if isinstance(parent, _SCOPES):
+                return parent.name
+            if id(parent) in module_symbols:
+                return module_symbols[id(parent)]
+            current = parent
+        return module_symbols.get(id(node), "<module>")
+
+    for node in ast.walk(tree):
+        if isinstance(node, _SCOPES):
+            index.references.setdefault(node.name, set()).update(_names_used(node) - {node.name})
+            if not isinstance(node, ast.ClassDef):
+                for deco in node.decorator_list:
+                    route = _route(deco)
+                    if route:
+                        index.routes.setdefault(node.name, []).append(route)
+
+    seen: set[tuple[int, str, str]] = set()
+
+    def add(token: str, line: int, kind: str, node: ast.AST) -> None:
+        if (line, token, kind) in seen:
+            return
+        seen.add((line, token, kind))
+        index.hits.append({
+            "file": file_path,
+            "line": line,
+            "token": token,
+            "change_ids": tokens[token],
+            "usage_kind": kind,
+            "symbol": symbol_of(node),
+            "endpoints": [],
+            "in_tests": file_path.startswith("tests/"),
+        })
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript):
+            key = node.slice
+            if isinstance(key, ast.Constant) and isinstance(key.value, str) and key.value in tokens:
+                add(key.value, node.lineno, "subscript", node)
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr == "get"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value in tokens
+            ):
+                add(node.args[0].value, node.lineno, "get_call", node)
+            for kw in node.keywords:
+                if kw.arg in tokens:
+                    add(kw.arg, kw.value.lineno, "keyword", node)
+        elif isinstance(node, ast.Attribute) and node.attr in tokens:
+            add(node.attr, node.lineno, "attribute", node)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id in tokens:
+            add(node.target.id, node.lineno, "model_field", node)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            index.constants.append((symbol_of(node), node.value))
+            if node.value in tokens:
+                add(node.value, node.lineno, "literal", node)
+                continue
+            for tok in tokens:
+                if len(node.value) > len(tok) and re.search(rf"\b{re.escape(tok)}\b", node.value):
+                    add(tok, node.lineno, "embedded_text", node)
+
+    return index

@@ -9,6 +9,8 @@ def get_latest_container_verification() -> dict:
     runs_dir = Path(__file__).resolve().parent.parent / "runs"
     runs = []
     for f in runs_dir.glob("*.json"):
+        if f.name.startswith("_"):  # the sample run is illustrative, not a recorded container run
+            continue
         try:
             d = json.loads(f.read_text(encoding="utf-8"))
             if d.get("verification"):

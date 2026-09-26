@@ -86,24 +86,24 @@
       </tr>
     </thead>
     <tbody>
-      {% if matrix.container_runs.v3 %}
+      {% for key, label in [("v3", "V3: Backward Compatibility (v1)"), ("v4", "V4: Forward Compatibility (v2)")] %}
+      {% set chk = matrix.container_runs[key] %}
+      {% if chk %}
       <tr>
-        <td><strong>V3: Backward Compatibility (v1)</strong></td>
-        <td><span style="color:var(--badge-green);">✅ Passed</span></td>
-        <td>{{ matrix.container_runs.v3.details }}</td>
+        <td><strong>{{ label }}</strong></td>
+        <td>
+          {% if chk.status in ("pass", "passed") %}<span style="color:var(--badge-green);">✅ Passed</span>
+          {% elif chk.status in ("skip", "skipped") %}<span style="color:var(--badge-yellow);">⏭️ Skipped</span>
+          {% else %}<span style="color:var(--badge-red);">❌ Failed</span>{% endif %}
+        </td>
+        <td>{{ chk.details }}</td>
       </tr>
       {% endif %}
-      {% if matrix.container_runs.v4 %}
-      <tr>
-        <td><strong>V4: Forward Compatibility (v2)</strong></td>
-        <td><span style="color:var(--badge-green);">✅ Passed</span></td>
-        <td>{{ matrix.container_runs.v4.details }}</td>
-      </tr>
-      {% endif %}
+      {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <p style="color:var(--text-secondary);">No recorded container runs found.</p>
+  <p style="color:var(--text-secondary);">No container run recorded yet. Run H-1 / the hero run, or start one from a repo analysis page.</p>
   {% endif %}
 </div>
 {% endblock %}

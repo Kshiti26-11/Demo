@@ -1,18 +1,155 @@
 {% extends "base.html" %}
-{% block title %}SyncSnitch — Contract Drift Autonomous Agent{% endblock %}
+{% block title %}{% if run_id %}Run {{ run_id }} — {% endif %}SyncSnitch — Contract Drift Agents{% endblock %}
 {% block content %}
-<section class="hero">
-  <h1>Autonomous, Human-Gated Contract Drift</h1>
-  <p>An upstream team changed a contract. SyncSnitch found every downstream break, generated a backward-compatible fix, proved it in containers and opened a draft PR after a human approved.</p>
-  <div class="hero-buttons">
-    <a href="/runs" class="btn btn-primary">Runs Replay</a>
-    <a href="/matrix" class="btn btn-secondary">Live Matrix</a>
-    <a href="/try" class="btn btn-secondary">Try it Sandbox</a>
+<section class="launcher-wrap">
+  <form class="launcher" id="launcher" action="/launch" method="post" autocomplete="off">
+    <h1 class="launcher-title">🚀 Launch SyncSnitch on any GitHub PR or Repository</h1>
+    <p class="launcher-sub">Paste a GitHub pull request or repo link and press <kbd>Enter</kbd> to launch all 3 autonomous subagents</p>
+    <div class="launcher-row">
+      <span class="launcher-icon" aria-hidden="true">🔗</span>
+      <label for="link" class="sr-only">GitHub pull request or repository link</label>
+      <input id="link" name="link" type="text" required spellcheck="false"
+             value="{{ link_input or 'https://github.com/kshiti26-11/demo' }}"
+             placeholder="https://github.com/owner/orders-service/pull/1">
+      <button type="submit" class="btn btn-primary btn-run" id="launch-btn" aria-label="Run 3 Agents">
+        <span class="spinner" aria-hidden="true"></span><span class="btn-label">Run 3 Agents</span>
+      </button>
+    </div>
+    <p class="launcher-error" id="launch-error" role="alert" {% if not launch_error %}hidden{% endif %}>{{ launch_error or '' }}</p>
+    <div class="presets">
+      <span class="presets-label">Quick presets:</span>
+      <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo">kshiti26-11/demo (Orders V2 breaking change)</button>
+      <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo/tree/branch1">demo @ branch1</button>
+      <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo/compare/15f95af...branch1">compare 15f95af...branch1</button>
+    </div>
+  </form>
+</section>
+
+<section class="console {% if run_id %}is-open{% endif %}" id="console" aria-label="Live multi-agent orchestrator" {% if not run_id %}aria-hidden="true" inert{% endif %}>
+  <div class="console-inner">
+    <div class="console-bar">
+      <div class="console-left">
+        <span class="live-dot" id="live-dot" aria-hidden="true"></span>
+        <strong class="console-title">SyncSnitch Multi-Agent Orchestrator</strong>
+        <span class="phase" id="phase">STARTING</span>
+      </div>
+      <div class="console-right">
+        <span class="tag coins" id="coins" hidden title="What this run's agent sessions have used / the run's budget"><span id="coins-icon">🪙</span> <strong id="coins-spent">0</strong> / <span id="coins-budget">–</span> <span id="coins-unit">Bobcoins</span><span id="coins-engine" class="engine"></span></span>
+        <span class="tag">Consumer: <strong id="consumer">…</strong></span>
+        <span class="run-badge" id="run-badge">RUN: {{ run_id or '…' }}</span>
+        <button type="button" class="btn btn-ghost" id="reset-btn" title="Clear and launch another run">↺ New run</button>
+      </div>
+      <div class="console-target">Target: <code id="target">…</code></div>
+    </div>
+
+    <div class="bob-start" id="setup" hidden>
+      <div>
+        <h2>⚙️ One-time setup: let this machine run the 3 agents</h2>
+        <p>S1–S2 ran here. The Tracer, Transformer and Verifier are AI agents that this site starts by itself, on
+          IBM Bob (Bob Shell), Gemini (free Google AI Studio key), Grok or Claude, with no IDE step. This machine is missing:</p>
+        <ol class="setup-list" id="setup-list"></ol>
+        <div class="cmd-actions">
+          <button type="button" class="btn btn-primary" id="start-btn" disabled>▶ Start the 3 agents</button>
+          <span class="muted" id="start-note"></span>
+        </div>
+        <details class="alt">
+          <summary>Alternative: run the agents inside the IBM Bob IDE instead</summary>
+          <p>In the <code>kshiti26-11/demo</code> workspace start a new Bob task and paste this. This console follows it live.</p>
+          <div class="cmd"><pre id="bob-cmd"></pre>
+            <div class="cmd-actions">
+              <button type="button" class="btn btn-ghost" id="copy-btn">Copy</button>
+              {% if bob_available %}<button type="button" class="btn btn-ghost" data-open-bob>Open IBM Bob</button>{% endif %}
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="error-box" id="run-error-box" hidden role="alert">
+      <p id="run-error"></p>
+      <button type="button" class="btn btn-ghost" id="resume-btn" hidden>▶ Resume agents</button>
+    </div>
+
+    <div class="agents">
+      <article class="agent agent-1" id="agent-tracer" data-status="queued">
+        <header><span class="agent-no">🔎 Subagent 1</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <h2>Schema Diff &amp; AST Tracer</h2>
+        <p class="role">Zero-token diff on REST, gRPC &amp; DB; traces consumer AST reachability.</p>
+        <dl class="facts">
+          <dt>Breaking Changes</dt><dd data-f="breaking">–</dd>
+          <dt>Surfaces</dt><dd data-f="surfaces">–</dd>
+          <dt>AST Candidate Hits</dt><dd data-f="usages">–</dd>
+          <dt>Public APIs</dt><dd data-f="endpoints">–</dd>
+        </dl>
+        <ul class="eps" data-f="eplist"></ul>
+        <p class="callout" data-f="flag" hidden></p>
+        <p class="bobline" data-f="bob">agent <code>syncsnitch-tracer</code></p>
+      </article>
+
+      <article class="agent agent-2" id="agent-transformer" data-status="queued">
+        <header><span class="agent-no">🛠️ Subagent 2</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <h2>Downstream Code Transformer</h2>
+        <p class="role">Synthesizes backward-compatible tolerant reader adapters for the consumer.</p>
+        <dl class="facts">
+          <dt>Pattern</dt><dd>Tolerant Reader Adapter</dd>
+          <dt>Branch</dt><dd data-f="branch" class="mono">–</dd>
+          <dt>Modified Files</dt><dd data-f="files">–</dd>
+          <dt>Diffstat</dt><dd data-f="diffstat">–</dd>
+          <dt>Compatibility</dt><dd data-f="compat">–</dd>
+        </dl>
+        <button type="button" class="btn btn-ghost btn-diff" id="diff-btn" disabled aria-expanded="false" aria-controls="diff-box">Toggle Patch Diff</button>
+        <pre class="diff-box" id="diff-box" hidden></pre>
+        <p class="bobline" data-f="bob">agent <code>syncsnitch-transformer</code></p>
+      </article>
+
+      <article class="agent agent-3" id="agent-verifier" data-status="queued">
+        <header><span class="agent-no">✅ Subagent 3</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <h2>Contract Verifier</h2>
+        <p class="role">Deterministic judge running the V1–V6 suite in a mock container harness.</p>
+        <ul class="checks" id="checks">
+          {% for cid, name in [("V1", "Consumer unit tests"), ("V2", "Fixtures schema match"), ("V3", "Dual-run vs Upstream v1"),
+                              ("V4", "Dual-run vs Upstream v2"), ("V5", "Prism contract examples"), ("V6", "Diff scope guardrails")] %}
+          <li data-check="{{ cid }}"><span class="check-name"><b>{{ cid }}</b> {{ name }}<small class="check-detail"></small></span>
+            <span class="pill pill-idle">WAITING</span></li>
+          {% endfor %}
+        </ul>
+        <p class="verdict"><span>Final Verdict</span><strong data-f="verdict">–</strong></p>
+        <p class="bobline" data-f="bob">agent <code>syncsnitch-verifier</code></p>
+      </article>
+    </div>
+
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>SyncSnitch Live Agent Log Stream</span>
+        <span class="stream-state" id="stream-state"><i class="blink" aria-hidden="true"></i><span>STREAMING</span></span>
+      </div>
+      <ol class="terminal-body" id="log" aria-live="polite"></ol>
+    </div>
+
+    <section class="gate" id="gate" hidden>
+      <h2 id="gate-title">🛡️ S7 Human Approval Gate</h2>
+      <p id="gate-desc"></p>
+      <p class="gate-note" id="gate-note"></p>
+      <div class="gate-actions">
+        <button type="button" class="btn btn-approve" id="approve-btn">✅ Approve &amp; Open Draft PR</button>
+        <button type="button" class="btn btn-reject" id="reject-btn">✖ Reject</button>
+        <a class="btn btn-ghost" id="replay-btn" href="#" aria-disabled="true">🔍 View Run Replay</a>
+      </div>
+      <p class="celebrate" id="celebrate" hidden></p>
+    </section>
+
+    <div class="console-footer">
+      <button type="button" class="btn btn-ghost" id="actions-btn" hidden>Run S5 containers in GitHub Actions</button>
+      <a class="btn btn-ghost" id="analyze-link" href="#" hidden>Full S1–S2 report</a>
+      <span class="muted" id="actions-note"></span>
+    </div>
   </div>
 </section>
 
-<div class="card">
+<section class="card pipeline-card">
   <h2>The S1–S9 Workflow Pipeline</h2>
+  <p class="muted">An upstream team changed a contract. SyncSnitch found every downstream break, generated a backward-compatible fix, proved it in containers and opened a draft PR after a human approved.</p>
   <div class="pipeline-grid">
     <div class="pipeline-step"><div class="step-id">S1</div><div class="step-name">Detect</div><span class="badge badge-deterministic">0 COINS</span></div>
     <div class="pipeline-step"><div class="step-id">S2</div><div class="step-name">Trace</div><span class="badge badge-deterministic">0 COINS</span></div>
@@ -24,5 +161,8 @@
     <div class="pipeline-step"><div class="step-id">S8</div><div class="step-name">Draft PR</div><span class="badge badge-deterministic">0 COINS</span></div>
     <div class="pipeline-step"><div class="step-id">S9</div><div class="step-name">Artifact</div><span class="badge badge-deterministic">0 COINS</span></div>
   </div>
-</div>
+</section>
+
+<script type="application/json" id="boot">{{ {"run": run_id or none, "query": query or "", "bob": bob_available or false} | tojson }}</script>
+<script src="/static/console.js" defer></script>
 {% endblock %}

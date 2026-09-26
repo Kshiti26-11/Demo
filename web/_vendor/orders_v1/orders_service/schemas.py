@@ -1,19 +1,26 @@
-﻿from datetime import UTC, datetime
-from pydantic import BaseModel, ConfigDict
+import datetime
+from datetime import timezone as _tz
 
-def utc(dt: datetime) -> datetime:
+from pydantic import BaseModel
+
+
+UTC = _tz.utc
+
+
+def utc(dt: datetime.datetime) -> datetime.datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)
 
-class OrderOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
 
+class OrderOut(BaseModel):
     order_id: str
     customer_name: str
     total_price: float
     status: str
-    created_at: datetime
+    created_at: datetime.datetime
+
+    model_config = {"json_encoders": {datetime.datetime: lambda v: v.strftime("%Y-%m-%dT%H:%M:%SZ")}}
 
     @classmethod
     def from_row(cls, row) -> "OrderOut":

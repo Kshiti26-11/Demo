@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Analyze a repo — SyncSnitch{% endblock %}
+{% block content %}
+<form class="repo-form" action="/analyze" method="get">
+  <label for="repo" class="repo-label">GitHub repo link</label>
+  <div class="repo-row">
+    <input id="repo" name="repo" type="text" required autocomplete="off" spellcheck="false"
+           value="{{ repo_input }}" placeholder="https://github.com/kshiti26-11/demo">
+    <button type="submit" class="btn btn-primary">Analyze ↵</button>
+  </div>
+</form>
+
+{% if error %}
+<div class="error-box" role="alert"><strong>Could not analyze this repo.</strong> {{ error }}</div>
+{% endif %}
+
+{% if result %}
+{% set r = result %}
+<div class="card">
+  <h2>{{ r.repo }}</h2>
+  {% for n in found.notes %}<p class="muted">{{ n }}</p>{% endfor %}
+  <form action="/analyze" method="get" style="margin-top:0.75rem;">
+    <input type="hidden" name="repo" value="{{ r.repo }}">
+    <input type="hidden" name="run" value="{{ run_id }}">
+    <div class="settings-grid">
+      <label>Upstream (owns the contract)
+        <select name="upstream">
+          {% for d in found.upstreams %}<option value="{{ d }}" {% if d == r.upstream %}selected{% endif %}>{{ d or "(repo root)" }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Consumer (gets the fix)
+        <select name="consumer">
+          {% for d in found.consumers if d != r.upstream %}<option value="{{ d }}" {% if d == r.consumer %}selected{% endif %}>{{ d or "(repo root)" }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Base (old contract)
+        <select name="base">
+          {% set ns = namespace(found=false) %}
+          {% for c in commits %}
+            <option value="{{ c.sha[:12] }}" {% if r.base_sha.startswith(c.sha[:12]) %}{% set ns.found = true %}selected{% endif %}>{{ c.short }} · {{ c.message }}</option>
+          {% endfor %}
+          {% for b in found.branches %}<option value="{{ b }}" {% if not ns.found and b == r.base %}{% set ns.found = true %}selected{% endif %}>branch {{ b }}</option>{% endfor %}
+          {% if not ns.found %}<option value="{{ r.base }}" selected>{{ r.base }}</option>{% endif %}
+        </select>
+      </label>
+      <label>Head (new contract)
+        <select name="head">
+          {% for b in found.branches %}<option value="{{ b }}" {% if b == r.head %}selected{% endif %}>{{ b }}</option>{% endfor %}
+          {% if r.head not in found.branches %}<option value="{{ r.head }}" selected>{{ r.head }}</option>{% endif %}
+        </select>
+      </label>
+      <label>Consumer version (e.g. Bob's fix branch)
+        <select name="consumer_ref">
+          <option value="" {% if r.consumer_ref == r.head %}selected{% endif %}>same as head</option>
+          {% for b in found.branches if b != r.head %}<option value="{{ b }}" {% if b == r.consumer_ref %}selected{% endif %}>{{ b }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <p style="margin-top:1rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+      <button type="submit" class="btn btn-secondary">Re-run S1–S2</button>
+      <button type="button" class="btn btn-primary" id="launch-live">Run 3 Agents with these settings</button>
+    </p>
+  </form>
+  <div class="stat-row">
+    <div class="stat"><strong>{{ r.summary.breaking }}</strong><span>breaking of {{ r.summary.total }} changes</span></div>
+    <div class="stat"><strong>{{ r.summary.by_surface.rest }} · {{ r.summary.by_surface.grpc }} · {{ r.summary.by_surface.db }}</strong><span>REST · gRPC · DB</span></div>
+    <div class="stat"><strong>{{ r.summary.files }}</strong><span>consumer files hit ({{ r.consumer_files_scanned }} scanned)</span></div>
+    <div class="stat"><strong>{{ r.summary.endpoints | length }}</strong><span>endpoints affected</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Run <code>{{ run_id }}</code> · S1–S9</h2>
+  <div class="pipeline-grid" id="tracker">
+    {% set steps = [
+      ("S1", "Detect", "deterministic", "done", "done here"),
+      ("S2", "Trace", "deterministic", "done", "done here"),
+      ("S3", "Tracer", "ai", "waiting", "IBM Bob"),
+      ("S4", "Transformer", "ai", "waiting", "IBM Bob"),
+      ("S5", "Containers", "deterministic", "waiting", "Bob or Actions"),
+      ("S6", "Verifier", "ai", "waiting", "IBM Bob"),
+      ("S7", "Human gate", "human", "waiting", "you, in Bob"),
+      ("S8", "Draft PR", "deterministic", "waiting", "IBM Bob"),
+      ("S9", "Artifact", "deterministic", "waiting", "IBM Bob"),
+    ] %}
+    {% for sid, name, kind, state, who in steps %}
+    <div class="pipeline-step state-{{ state }}" id="step-{{ sid }}">
+      <div class="step-id">{{ sid }}</div>
+      <div class="step-name">{{ name }}</div>
+      <span class="badge badge-{{ kind }}">{{ "AI agent" if kind == "ai" else kind }}</span>
+      <span class="step-state">{{ "✅ " if state == "done" else "⏳ " }}{{ who }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="muted" id="status-line">Waiting for IBM Bob to pick up this run…</p>
+</div>
+
+<div class="card">
+  <h2>Start the 3 agents in IBM Bob</h2>
+  <p>Open the <code>kshiti26-11/demo</code> workspace in IBM Bob, start a <strong>new task</strong> and paste this. Bob's
+    Tracer, Transformer and Verifier run S3–S7 and stop for your approval. After S9 this page turns green by itself.</p>
+  <div class="cmd" style="margin-top:0.75rem;">
+    <pre id="bob-cmd">{{ bob_command }}</pre>
+    <button type="button" class="btn btn-primary" id="copy-btn">Copy</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>S5 · Prove it in containers (GitHub Actions)</h2>
+  <p class="muted">Runs the consumer's integration tests against the real upstream v1 and v2 in Docker mock containers
+    ({{ home_repo }} · <code>syncsnitch-analyze.yml</code>). Before Bob's fix, v2 is expected to fail.</p>
+  <p style="margin-top:0.75rem;">
+    <button type="button" class="btn btn-secondary" id="verify-btn" {% if not actions_enabled %}disabled title="The server has no GITHUB_TOKEN"{% endif %}>Verify consumer <code>{{ r.consumer_ref }}</code> in GitHub Actions</button>
+  </p>
+  <div id="actions-status" class="muted" style="margin-top:0.5rem;"></div>
+  <div id="actions-table" class="table-wrap"></div>
+</div>
+
+<div class="card">
+  <h2>Impact map</h2>
+  {% if impact_graph %}<div class="mermaid">
+{{ impact_graph }}
+  </div>{% else %}<p class="muted">No consumer usages of the breaking changes.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>S1 · Contract drift ({{ r.base_sha[:7] }} → {{ r.head }})</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Surface</th><th>Kind</th><th>Location</th><th>Old → New</th><th>Breaking</th></tr></thead>
+    <tbody>
+    {% for c in r.changes if c.kind != "data_update" %}
+      <tr class="{% if c.breaking %}breaking{% endif %}">
+        <td><span class="badge badge-deterministic">{{ c.surface }}</span></td>
+        <td>{{ c.kind }}</td><td><code>{{ c.location }}</code></td>
+        <td><code>{{ c.old or "–" }}</code> → <code>{{ c.new or "–" }}</code></td>
+        <td>{% if c.breaking %}<span class="badge badge-breaking">breaking</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="muted">No contract changes between these refs.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<div class="card">
+  <h2>S2 · Consumer usages ({{ r.consumer or "repo root" }})</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>File</th><th>Line</th><th>Token</th><th>Usage</th><th>Endpoints</th></tr></thead>
+    <tbody>
+    {% for h in r.hits %}
+      <tr><td><code>{{ h.file }}</code></td><td>{{ h.line }}</td><td><code>{{ h.token }}</code></td>
+        <td>{{ h.usage_kind }}</td><td>{{ h.endpoints | join(", ") }}</td></tr>
+    {% else %}
+      <tr><td colspan="5" class="muted">No usages found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<script type="application/json" id="ctx">{{ {"run": run_id, "verify": {"repo": r.repo, "upstream": r.upstream, "consumer": r.consumer, "base": r.base_sha, "head": r.head, "consumer_ref": r.consumer_ref, "run": run_id}} | tojson }}</script>
+<script>
+(() => {
+  const ctx = JSON.parse(document.getElementById('ctx').textContent);
+  const icons = {pass: '✅', fail: '❌', skip: '⏭️'};
+  const setStep = (id, state, text) => {
+    const el = document.getElementById('step-' + id);
+    if (!el) return;
+    el.className = 'pipeline-step state-' + state;
+    el.querySelector('.step-state').textContent = text;
+  };
+
+  document.getElementById('copy-btn').addEventListener('click', async (e) => {
+    const pre = document.getElementById('bob-cmd');
+    try { await navigator.clipboard.writeText(pre.textContent); e.target.textContent = 'Copied ✓'; return; } catch { /* fall back */ }
+    const range = document.createRange();
+    range.selectNodeContents(pre);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    e.target.textContent = ok ? 'Copied ✓' : 'Selected: press ⌘C';
+  });
+
+  document.getElementById('launch-live').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    const v = ctx.verify;
+    const res = await fetch('/api/launch', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({link: 'https://github.com/' + v.repo, upstream: v.upstream, consumer: v.consumer,
+                            base: v.base.slice(0, 12), head: v.head})});
+    const data = await res.json();
+    if (res.ok) window.location.assign(data.url); else { e.target.disabled = false; alert('Could not launch: ' + data.detail); }
+  });
+
+  const verifyBtn = document.getElementById('verify-btn');
+  verifyBtn.addEventListener('click', async () => {
+    verifyBtn.disabled = true;
+    const res = await fetch('/api/analyze/verify', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(ctx.verify)});
+    const data = await res.json();
+    document.getElementById('actions-status').textContent = res.ok ? 'Started. The first container build takes 3–6 minutes…' : ('Could not start: ' + data.detail);
+    if (!res.ok) verifyBtn.disabled = false;
+    setStep('S5', 'running', '⏳ GitHub Actions');
+    poll();
+  });
+
+  function renderChecks(v) {
+    const t = document.createElement('table');
+    t.innerHTML = '<thead><tr><th>Check</th><th>Name</th><th>Result</th><th>Details</th></tr></thead>';
+    const body = t.createTBody();
+    for (const c of v.checks || []) {
+      const row = body.insertRow();
+      [c.id, c.name, (icons[c.status] || '') + ' ' + c.status, c.details].forEach(x => { row.insertCell().textContent = x; });
+    }
+    const box = document.getElementById('actions-table');
+    box.replaceChildren(t);
+  }
+
+  let timer = null;
+  async function poll() {
+    let done = false;
+    try {
+      const res = await fetch('/api/analyze/status?run=' + encodeURIComponent(ctx.run));
+      const s = await res.json();
+      if (s.bob && s.bob.steps) {
+        for (const st of s.bob.steps) setStep(st.id, st.status === 'done' ? 'done' : 'waiting', (st.status === 'done' ? '✅ ' : '⏭️ ') + st.status);
+        const line = document.getElementById('status-line');
+        line.textContent = 'IBM Bob finished this run' + (s.bob.verdict ? ' · verdict ' + s.bob.verdict.toUpperCase() : '') + '. ';
+        const a = document.createElement('a'); a.href = s.bob.url; a.textContent = 'Open the run replay';
+        line.append(a);
+        if (s.bob.companion_pr_url) {
+          const pr = document.createElement('a'); pr.href = s.bob.companion_pr_url; pr.textContent = ' · draft companion PR';
+          line.append(pr);
+        }
+        done = true;
+      }
+      if (s.actions) {
+        const st = document.getElementById('actions-status');
+        st.textContent = 'GitHub Actions: ' + s.actions.status + (s.actions.conclusion ? ' · ' + s.actions.conclusion : '') + ' ';
+        const a = document.createElement('a'); a.href = s.actions.html_url; a.textContent = 'open run'; st.append(a);
+        if (s.actions.verification) renderChecks(s.actions.verification);
+        if (s.actions.status === 'completed' && !(s.bob && s.bob.steps)) {
+          setStep('S5', s.actions.conclusion === 'success' ? 'done' : 'failed', (s.actions.conclusion === 'success' ? '✅ ' : '❌ ') + 'Actions');
+        }
+        done = done && s.actions.status === 'completed';
+      }
+    } catch (e) { /* keep polling */ }
+    clearTimeout(timer);
+    if (!done) timer = setTimeout(poll, 8000);
+  }
+  poll();
+})();
+</script>
+{% endif %}
+{% endblock %}

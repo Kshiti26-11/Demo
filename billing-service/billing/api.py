@@ -1,13 +1,12 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from billing import config
-from billing.clients.orders_rest import OrdersRestClient, OrderNotFound as RestOrderNotFound
-from billing.clients.orders_grpc import get_order_summary, OrderNotFound as GrpcOrderNotFound
-from billing.models.order import OrderDTO
-from billing.services.invoice import build_invoice
-from billing.services.payments import status_from_summary
-from billing.reports.revenue import run_revenue_report
+from . import config
+from .clients.orders_rest import OrdersRestClient, OrderNotFound as RestOrderNotFound
+from .clients.orders_grpc import get_order_summary, OrderNotFound as GrpcOrderNotFound
+from .contract_entrypoints import invoice_from_order_payload
+from .services.payments import status_from_summary
+from .reports.revenue import run_revenue_report
 
 
 def create_app(
@@ -35,8 +34,7 @@ def create_app(
         except RestOrderNotFound:
             return JSONResponse(status_code=404, content={"detail": "order not found"})
 
-        order = OrderDTO.model_validate(payload)
-        invoice = build_invoice(order)
+        invoice = invoice_from_order_payload(payload)
         if invoice is None:
             return JSONResponse(status_code=409, content={"detail": "order not payable"})
 

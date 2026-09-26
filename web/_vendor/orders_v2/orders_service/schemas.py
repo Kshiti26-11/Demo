@@ -1,42 +1,36 @@
-from datetime import UTC, datetime
-from pydantic import BaseModel, ConfigDict, field_serializer
+import datetime
+from datetime import timezone as _tz
+from typing import Optional
 
-def utc(dt: datetime) -> datetime:
+from pydantic import BaseModel
+
+
+UTC = _tz.utc
+
+
+def utc(dt: datetime.datetime) -> datetime.datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)
 
-class CustomerOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
 
+class CustomerOut(BaseModel):
     customer_id: str
     display_name: str
 
-class MoneyOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
 
+class MoneyOut(BaseModel):
     amount_minor: int
     currency: str
 
-class OrderOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
 
+class OrderOut(BaseModel):
     order_id: str
     customer: CustomerOut
     total: MoneyOut
     status: str
-    created_at: datetime
-    shipping_eta: datetime | None = None
-
-    @field_serializer("created_at", when_used="json-unless-none")
-    def serialize_created_at(self, dt: datetime) -> str:
-        return utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    @field_serializer("shipping_eta", when_used="json-unless-none")
-    def serialize_shipping_eta(self, dt: datetime | None) -> str | None:
-        if dt is None:
-            return None
-        return utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
+    created_at: datetime.datetime
+    shipping_eta: Optional[datetime.datetime] = None
 
     @classmethod
     def from_row(cls, row) -> "OrderOut":
@@ -47,7 +41,7 @@ class OrderOut(BaseModel):
                 display_name=row.customer_display_name,
             ),
             total=MoneyOut(
-                amount_minor=int(row.total_minor),
+                amount_minor=row.total_minor,
                 currency=row.currency,
             ),
             status=row.status,

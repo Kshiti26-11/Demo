@@ -300,12 +300,24 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
                 if not (any(p.startswith(pref) for pref in allowed_prefixes) or p in allowed_exact):
                     disallowed.append(p)
 
+            # the existing (v1) examples are the proof that old payloads still work: they may never be edited
+            _, out_mod = runner.run(["git", "-C", str(consumer), "diff", "--name-only", "--diff-filter=MR",
+                                     f"{consumer_base_sha}...HEAD"])
+            edited_fixtures = [p for p in scoped(out_mod) if p.startswith("tests/fixtures/")]
+
             if del_tests:
                 checks.append({
                     "id": "V6",
                     "name": "diff scope",
                     "status": "fail",
                     "details": f"tests deleted: {', '.join(del_tests)}",
+                })
+            elif edited_fixtures:
+                checks.append({
+                    "id": "V6",
+                    "name": "diff scope",
+                    "status": "fail",
+                    "details": f"existing fixtures edited (keep them unchanged, add new ones): {', '.join(edited_fixtures)}",
                 })
             elif disallowed:
                 checks.append({

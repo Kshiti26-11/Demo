@@ -169,9 +169,11 @@ def test_open_bob_is_local_only(client, monkeypatch):
     assert calls == [["/usr/bin/true", str(live.REPO_ROOT)]]
 
 
-def test_header_badge_shows_the_real_port(client, monkeypatch):
+def test_header_badge_names_the_serving_host(client, monkeypatch):
+    """The case-files pill reads LIVE; its tooltip says which host and port is serving (real site vs a stale one)."""
     monkeypatch.setattr(live, "ON_VERCEL", False)
-    assert "LIVE :8123" in TestClient(client.app, base_url="http://127.0.0.1:8123").get("/").text
+    home = TestClient(client.app, base_url="http://127.0.0.1:8123").get("/").text
+    assert 'id="live-pill"' in home and "serving from 127.0.0.1:8123" in home
 
 
 def test_replay_page_tolerates_artifacts_without_a_drift_summary(client):

@@ -40,7 +40,7 @@ def test_analyze_page_renders(client):
 
 def test_home_has_repo_box(client):
     home = client.get("/").text
-    assert 'action="/launch"' in home and "Run 3 Agents" in home and 'href="/analyze"' in home
+    assert 'action="/launch"' in home and "Assign detectives" in home and 'href="/analyze"' in home
 
 
 @pytest.mark.parametrize("link", ["not a link", "https://gitlab.com/x", "https://github.com/o/missing"])

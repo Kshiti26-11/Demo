@@ -28,7 +28,7 @@
   function setBusy(busy) {
     btn.disabled = busy;
     btn.classList.toggle('is-busy', busy);
-    btn.querySelector('.btn-label').textContent = busy ? 'Launching…' : 'Run 3 Agents';
+    btn.querySelector('.btn-label').textContent = busy ? 'Launching…' : 'Assign detectives';
   }
   async function launch() {
     err.hidden = true;
@@ -315,11 +315,11 @@
     const skipped = v.checks.filter((c) => c.status === 'skip').length;
     if (s.phase === 'aborted') {
       gate.className = 'gate gate-blocked';
-      $('gate-title').textContent = '🛡️ S7 Human Approval Gate — REJECTED';
+      $('gate-title').textContent = 'Warrant denied: run rejected';
       $('gate-desc').textContent = 'The human rejected this run: nothing was pushed and no PR was opened.';
     } else if (v.verdict === 'green') {
       gate.className = 'gate gate-open';
-      $('gate-title').textContent = '🛡️ S7 Human Approval Gate Unlocked — '
+      $('gate-title').textContent = 'Warrant ready to sign: '
         + (skipped ? `GREEN · ${skipped} of 6 checks skipped` : 'VERIFIED PASS');
       const ids = (st) => v.checks.filter((c) => c.status === st).map((c) => c.id).join(', ');
       $('gate-desc').textContent = (containers ? 'Contract verified against both Upstream v1 & v2 in mock containers. ' : '')
@@ -327,11 +327,11 @@
         + ' Review the tolerant-reader diff and approve the companion draft PR.';
     } else if (v.verdict === 'red') {
       gate.className = 'gate gate-blocked';
-      $('gate-title').textContent = '🛡️ S7 Human Approval Gate — BLOCKED (verification RED)';
+      $('gate-title').textContent = 'Warrant blocked: verification RED';
       $('gate-desc').textContent = 'The Verifier routed fixes back to the Transformer. Nothing is opened until the checks are green.';
     } else {
       gate.className = 'gate gate-open';
-      $('gate-title').textContent = '🛡️ S7 Human Approval Gate';
+      $('gate-title').textContent = 'Warrant awaiting signature';
       $('gate-desc').textContent = 'Waiting for the human decision in IBM Bob.';
     }
     const r = s.runner, runnerGate = Boolean(r && r.state !== 'blocked');

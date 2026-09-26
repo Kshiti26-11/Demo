@@ -1,0 +1,59 @@
+## Why this PR exists
+Upstream contract changes were detected{% if upstream_pr_url %} in [{{ upstream_pr_url }}]({{ upstream_pr_url }}){% endif %}.
+Total changes: **{{ drift.summary.total }}** ({{ drift.summary.breaking }} breaking: {{ drift.summary.by_surface.rest }} REST, {{ drift.summary.by_surface.grpc }} gRPC, {{ drift.summary.by_surface.db }} DB).
+
+## Contract drift
+| Surface | Kind | Location | Old &rarr; New | Breaking |
+|---|---|---|---|---|
+{% for c in drift.changes -%}
+| `{{ c.surface }}` | `{{ c.kind }}` | `{{ c.location }}` | `{{ c.old or '-' }}` &rarr; `{{ c.new or '-' }}` | {{ "⚠️ yes" if c.breaking else "no" }} |
+{% endfor %}
+
+## Impact
+{% if impact and impact.endpoints -%}
+The following endpoints and services are impacted:
+{% for ep in impact.endpoints -%}
+- **{{ ep.route }}** ({{ ep.failure_type }}): {{ ep.description }}
+{% endfor -%}
+{% elif candidates and candidates.summary.endpoints -%}
+Affected endpoints identified via static trace:
+{% for ep in candidates.summary.endpoints -%}
+- `{{ ep }}`
+{% endfor %}
+{% if candidates.summary.files -%}
+Affected files:
+{% for f in candidates.summary.files -%}
+- `{{ f }}`
+{% endfor -%}
+{% endif -%}
+{% else -%}
+No downstream endpoints directly impacted.
+{% endif %}
+
+## Verification
+{% if verification and verification.checks -%}
+| Check | Name | Result | Details |
+|---|---|---|---|
+{% for chk in verification.checks -%}
+| `{{ chk.id }}` | {{ chk.name }} | {{ "✅ pass" if chk.status == "pass" else ("❌ fail" if chk.status == "fail" else "⏭️ skip") }} | {{ chk.details }} |
+{% endfor %}
+Verdict: **{{ verification.summary.verdict | upper }}**
+{% else -%}
+Verification pending or not run.
+{% endif %}
+
+## Migration notes
+{% if impact and impact.migration_notes -%}
+{{ impact.migration_notes }}
+{% else -%}
+Implements tolerant reader adapters across all modified surfaces.
+{% endif %}
+
+## Rollout plan
+1. Merge this tolerant reader companion PR into consumer `main`.
+2. Deploy upstream v2 service to production.
+3. Remove the v1 compatibility adapters in a subsequent cleanup PR once upstream v1 is decommissioned.
+
+## Evidence
+- Run ID: `{{ run_id }}`
+- Built with IBM Bob - see `bob_sessions/` in `kshiti26-11/demo`.

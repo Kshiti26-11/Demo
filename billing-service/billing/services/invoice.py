@@ -1,7 +1,8 @@
 from decimal import Decimal, ROUND_HALF_UP
 
 TAX_RATE = Decimal("0.0825")
-NOT_PAYABLE = {"PENDING", "CANCELLED"}
+# AWAITING_PAYMENT is the v2 rename of PENDING; keep PENDING for v1 backward compat.
+NOT_PAYABLE = {"PENDING", "AWAITING_PAYMENT", "CANCELLED"}
 
 
 def _round_half_up(d: Decimal) -> int:
@@ -12,13 +13,14 @@ def build_invoice(order) -> dict | None:
     if order.status in NOT_PAYABLE:
         return None
 
-    subtotal = _round_half_up(Decimal(str(order.total_price)) * 100)
-    tax = _round_half_up(Decimal(str(order.total_price)) * 100 * TAX_RATE)
+    # Tolerant-reader: amount_minor resolves v2 total.amount_minor or v1 total_price×100.
+    subtotal = order.amount_minor
+    tax = _round_half_up(Decimal(subtotal) * TAX_RATE)
     total = subtotal + tax
 
     return {
         "order_id": order.order_id,
-        "customer": order.customer_name,
+        "customer": order.display_name,
         "subtotal_minor": subtotal,
         "tax_minor": tax,
         "total_minor": total,

@@ -1,7 +1,8 @@
 from decimal import Decimal, ROUND_HALF_UP
+from ..adapters.orders_contract import OrderView
 
 TAX_RATE = Decimal("0.0825")
-NOT_PAYABLE = {"PENDING", "CANCELLED"}
+NOT_PAYABLE = {"AWAITING_PAYMENT", "CANCELLLD", "PENDING", "CANCELLED"}
 
 
 def _round_half_up(d: Decimal) -> int:
@@ -9,18 +10,39 @@ def _round_half_up(d: Decimal) -> int:
 
 
 def build_invoice(order) -> dict | None:
-    if order.status in NOT_PAYABLE:
+    if isinstance(order, dict):
+        from ..adapters.orders_contract import from_rest
+        order = from_rest(order)
+    elif not isinstance(order, OrderView):
+        # Maybe it's a model or something else with attributes
+        pass
+
+    status = getattr(order, "status", None)
+    if status in NOT_PAYABLE:
         return None
 
-    subtotal = _round_half_up(Decimal(str(order.total_price)) * 100)
-    tax = _round_half_up(Decimal(str(order.total_price)) * 100 * TAX_RATE)
+    amount_minor = getattr(order, "amount_minor", None)
+    if amount_minor is None:
+        tp = getattr(order, "total_price", 0)
+        amount_minor = _round_half_up(Decimal(str(tp)) * 100)
+
+    subtotal = amount_minor
+    tax = _round_half_up(Decimal(subtotal) * TAX_RATE)
     total = subtotal + tax
 
+    customer_name = getattr(order, "customer_name", None)
+    if customer_name is None and hasattr(order, "customer"):
+        c = order.customer
+        if isinstance(c, dict):
+            customer_name = c.get("display_name", "")
+        else:
+            customer_name = getattr(c, "display_name", "")
+
     return {
-        "order_id": order.order_id,
-        "customer": order.customer_name,
+        "order_id": getattr(order, "order_id", ""),
+        "customer": customer_name,
         "subtotal_minor": subtotal,
         "tax_minor": tax,
         "total_minor": total,
-        "currency": "USD",
+        "currency": getattr(order, "currency", "USD"),
     }

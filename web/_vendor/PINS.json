@@ -2,6 +2,6 @@
   "orders_v1": {"ref": "15f95af", "sha": "15f95af008e5060450fa81ff0a58ed50627b1b2e"},
   "orders_v2": {"ref": "feat/orders-v2", "sha": "6fed0d8ad56c61c7ffe2de9b63cdcabb5a6e2812"},
   "billing_before": {"ref": ".", "sha": "working-tree@dd9fff4"},
-  "billing_after": {"ref": ".", "sha": "working-tree@dd9fff4"},
+  "billing_after": {"ref": "main + 76194d1 (PR #4 fix, syncsnitch/w-20260926-105257-13ae)", "sha": "76194d1a5f139f324f9f2101583741b58f27c586 applied on main 2e5c00e"},
   "syncsnitch_engine": {"ref": "working tree", "sha": "working-tree@dd9fff4"}
 }

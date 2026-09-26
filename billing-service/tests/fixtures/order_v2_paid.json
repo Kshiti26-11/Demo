@@ -1,0 +1,13 @@
+{
+  "order_id": "o-1001",
+  "customer": {
+    "customer_id": "c-1001",
+    "display_name": "Ada Lovelace"
+  },
+  "total": {
+    "amount_minor": 1999,
+    "currency": "USD"
+  },
+  "status": "PAID",
+  "created_at": "2026-09-01T10:00:00Z"
+}

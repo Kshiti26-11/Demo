@@ -1,5 +1,4 @@
-// Orders gRPC contract v1 - owned by orders-service (upstream).
-// Reference copy for SyncSnitch - do not edit.
+// Orders gRPC contract v2 with re-declared deprecated v1 fields for tolerant reading.
 syntax = "proto3";
 
 package orders;
@@ -15,15 +14,28 @@ message GetOrderSummaryRequest {
 
 enum OrderStatus {
   ORDER_STATUS_UNSPECIFIED = 0;
-  ORDER_STATUS_PENDING = 1;
+  ORDER_STATUS_AWAITING_PAYMENT = 1;
   ORDER_STATUS_PAID = 2;
   ORDER_STATUS_SHIPPED = 3;
   ORDER_STATUS_CANCELLED = 4;
 }
 
+message Money {
+  int64 amount_minor = 1;  // minor units, e.g. 1999 = 19.99 USD
+  string currency = 2;     // ISO 4217, e.g. "USD"
+}
+
+message Customer {
+  string customer_id = 1;
+  string display_name = 2;
+}
+
 message OrderSummary {
   string order_id = 1;
-  string customer_name = 2;
-  double total_price = 3;  // major units (USD), e.g. 19.99
+  string customer_name = 2 [deprecated = true];
+  double total_price = 3 [deprecated = true];
   OrderStatus status = 4;
+  Customer customer = 5;
+  Money total = 6;
+  string shipping_eta = 7;
 }

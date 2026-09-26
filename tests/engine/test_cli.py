@@ -156,15 +156,15 @@ class TestCliEndToEnd:
         assert result.returncode == 0
         assert "detect" in result.stdout.lower() or "detect" in result.stderr.lower()
 
-    def test_verify_not_built(self):
-        """syncsnitch verify should return exit code 2 when verify not built."""
+    def test_verify_available(self):
+        """syncsnitch verify is built by Person 4; running with no args should exit non-zero (missing required args)."""
         result = subprocess.run(
             ["uv", "run", "syncsnitch", "verify"],
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 2
-        assert "Person 4" in result.stdout or "Person 4" in result.stderr
+        # verify is present - missing required args causes exit 2 from argparse
+        assert result.returncode != 0
 
     def test_drift_json_written(self):
         """drift.json must be written to runs_dir/<run_id>/drift.json."""

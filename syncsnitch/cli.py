@@ -78,7 +78,19 @@ def _cmd_run_artifact(args: argparse.Namespace) -> int:
 def _cmd_verify(args: argparse.Namespace) -> int:
     try:
         from syncsnitch.verify import cli as verify_cli  # noqa: PLC0415
-        return verify_cli.main_verify(args)
+        # Build argv list from parsed args for the verify sub-command
+        argv = []
+        if hasattr(args, "run_id") and args.run_id:
+            argv += ["--run-id", args.run_id]
+        if hasattr(args, "upstream") and args.upstream:
+            argv += ["--upstream", str(args.upstream)]
+        if hasattr(args, "base") and args.base:
+            argv += ["--base", args.base]
+        if hasattr(args, "head") and args.head:
+            argv += ["--head", args.head]
+        if hasattr(args, "consumer") and args.consumer:
+            argv += ["--consumer", str(args.consumer)]
+        return verify_cli.main(argv if argv else None)
     except ImportError:
         print("syncsnitch verify is not built yet (Person 4 builds syncsnitch/verify/)")
         return 2

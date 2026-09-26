@@ -1,0 +1,94 @@
+## Why this PR exists
+
+The upstream orders-service has shipped contract changes between `{{ upstream.base }}` and
+`{{ upstream.head }}`. This companion PR makes the billing-service consumer tolerant of
+those changes before the upstream deploy.
+
+---
+
+## Contract drift
+
+Run ID: `{{ run_id }}`
+{% if upstream_pr_url %}Upstream PR: {{ upstream_pr_url }}{% endif %}
+
+| Surface | Total | Breaking |
+|---------|-------|---------|
+| REST    | {{ summary.by_surface.rest }} | {{ breaking_by_surface.rest }} |
+| gRPC    | {{ summary.by_surface.grpc }} | {{ breaking_by_surface.grpc }} |
+| DB      | {{ summary.by_surface.db }} | {{ breaking_by_surface.db }} |
+| **All** | **{{ summary.total }}** | **{{ summary.breaking }}** |
+
+{% if breaking_changes %}
+### Breaking changes
+
+| ID | Surface | Kind | Location | Old → New |
+|----|---------|------|----------|-----------|
+{% for c in breaking_changes %}| `{{ c.id }}` | {{ c.surface }} | {{ c.kind }} | `{{ c.location }}` | `{{ c.old }}` → `{{ c.new }}` |
+{% endfor %}
+{% endif %}
+
+---
+
+## Impact
+
+{% if candidates %}
+**Consumer:** `{{ candidates.consumer }}`
+
+Affected files: {{ candidates.summary.files }}
+Total hits: {{ candidates.summary.hits }}
+
+{% if candidates.summary.endpoints %}
+Affected endpoints:
+{% for ep in candidates.summary.endpoints %}
+- `{{ ep }}`
+{% endfor %}
+{% endif %}
+
+{% if candidates.hits %}
+| File | Line | Token | Usage | Endpoints |
+|------|------|-------|-------|-----------|
+{% for h in candidates.hits[:20] %}| `{{ h.file }}` | {{ h.line }} | `{{ h.token }}` | {{ h.usage_kind }} | {{ h.endpoints | join(', ') }} |
+{% endfor %}
+{% if candidates.hits | length > 20 %}*({{ candidates.hits | length - 20 }} more hits omitted)*{% endif %}
+{% endif %}
+{% else %}
+*No trace data available.*
+{% endif %}
+
+---
+
+## Verification
+
+{% if verification %}
+{% for v in verification %}
+- **{{ v.check }}**: `{{ v.result }}` — {{ v.note }}
+{% endfor %}
+{% else %}
+*Verification not yet run — run `/syncsnitch {{ upstream_pr_url }}` in IBM Bob.*
+{% endif %}
+
+{% if verdict %}
+**Verdict:** {{ verdict.status }} — {{ verdict.reason }}
+{% endif %}
+
+---
+
+## Migration notes
+
+- All changes follow a **tolerant reader** pattern.
+- No breaking changes are deployed without a migration window.
+
+---
+
+## Rollout plan
+
+1. merge tolerant reader
+2. deploy upstream v2
+3. remove v1 paths in cleanup PR
+
+---
+
+## Evidence
+
+- Run ID: `{{ run_id }}`
+- Built with IBM Bob - see bob_sessions/ in kshiti26-11/demo

@@ -1,184 +1,114 @@
-"""Python AST scanner: finds usages of changed contract tokens."""
+"""Python AST scanner: usages of changed contract tokens, plus the route/reference graph used for endpoints."""
 from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
-
-
-# ---------------------------------------------------------------------------
-# Route extraction helpers
-# ---------------------------------------------------------------------------
+from dataclasses import dataclass, field
 
 _HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
-def _extract_routes(tree: ast.Module) -> dict[str, list[str]]:
+@dataclass
+class PyFileIndex:
+    """What one .py file contributes to the consumer-wide graph."""
+
+    hits: list[dict] = field(default_factory=list)
+    routes: dict[str, list[str]] = field(default_factory=dict)  # function name -> ["METHOD /path"]
+    references: dict[str, set[str]] = field(default_factory=dict)  # symbol -> names it references
+    constants: list[tuple[str, str]] = field(default_factory=list)  # (symbol, string constant)
+
+
+def _route(deco: ast.expr) -> str | None:
+    if (
+        isinstance(deco, ast.Call)
+        and isinstance(deco.func, ast.Attribute)
+        and deco.func.attr.lower() in _HTTP_METHODS
+        and deco.args
+        and isinstance(deco.args[0], ast.Constant)
+        and isinstance(deco.args[0].value, str)
+    ):
+        return f"{deco.func.attr.upper()} {deco.args[0].value}"
+    return None
+
+
+def _names_used(node: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name):
+            names.add(child.id)
+        elif isinstance(child, ast.Attribute):
+            names.add(child.attr)
+    return names
+
+
+def scan_python_file(source: str, file_path: str, tokens: dict[str, list[str]]) -> PyFileIndex:
     """
-    Return a mapping of function_name -> [list of route strings like 'POST /foo/{id}'].
-    Looks for @<obj>.get/post/put/patch/delete("<path>") decorators.
+    Hits for every token (usage kinds: subscript, get_call, attribute, model_field, keyword, literal,
+    embedded_text) plus routes, references and string constants for the consumer-wide endpoint graph.
+    ``tokens`` maps token -> change ids. Hit endpoints are filled in later by trace_consumer.
     """
-    routes: dict[str, list[str]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        fn_name = node.name
-        for deco in node.decorator_list:
-            if not isinstance(deco, ast.Call):
-                continue
-            func = deco.func
-            if not isinstance(func, ast.Attribute):
-                continue
-            method = func.attr.lower()
-            if method not in _HTTP_METHODS:
-                continue
-            path_arg = None
-            if deco.args:
-                a = deco.args[0]
-                if isinstance(a, ast.Constant) and isinstance(a.value, str):
-                    path_arg = a.value
-            if path_arg:
-                key = fn_name
-                routes.setdefault(key, [])
-                routes[key].append(f"{method.upper()} {path_arg}")
-    return routes
-
-
-def _build_call_graph(tree: ast.Module) -> dict[str, set[str]]:
-    """Return {caller_fn -> {callee_names}} from simple Name/Attribute calls."""
-    graph: dict[str, set[str]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        callees: set[str] = set()
-        for child in ast.walk(node):
-            if not isinstance(child, ast.Call):
-                continue
-            func = child.func
-            if isinstance(func, ast.Name):
-                callees.add(func.id)
-            elif isinstance(func, ast.Attribute):
-                callees.add(func.attr)
-        graph[node.name] = callees
-    return graph
-
-
-def _reachable_endpoints(
-    start: str,
-    routes: dict[str, list[str]],
-    call_graph: dict[str, set[str]],
-    max_hops: int = 3,
-) -> list[str]:
-    """BFS up to max_hops hops, collect endpoints reachable from start symbol."""
-    visited: set[str] = set()
-    queue = [start]
-    endpoints: list[str] = []
-    hops = 0
-    while queue and hops <= max_hops:
-        next_queue: list[str] = []
-        for fn in queue:
-            if fn in visited:
-                continue
-            visited.add(fn)
-            endpoints.extend(routes.get(fn, []))
-            for callee in call_graph.get(fn, set()):
-                if callee not in visited:
-                    next_queue.append(callee)
-        queue = next_queue
-        hops += 1
-    return sorted(set(endpoints))
-
-
-# ---------------------------------------------------------------------------
-# Symbol context helpers
-# ---------------------------------------------------------------------------
-
-def _innermost_symbol(node: ast.AST, tree: ast.Module) -> str:
-    """Return the innermost enclosing function or class name; else module-level assignment."""
-    # Build parent map
-    parent_map: dict[int, ast.AST] = {}
-    for n in ast.walk(tree):
-        for child in ast.iter_child_nodes(n):
-            parent_map[id(child)] = n
-
-    # Walk up from node
-    current = node
-    while True:
-        parent = parent_map.get(id(current))
-        if parent is None:
-            break
-        if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            return parent.name
-        current = parent
-    return "<module>"
-
-
-# ---------------------------------------------------------------------------
-# Main scanner
-# ---------------------------------------------------------------------------
-
-def scan_python_file(
-    source: str,
-    file_path: str,
-    tokens: list[str],
-    change_ids_by_token: dict[str, list[str]],
-) -> list[dict]:
-    """
-    Scan a Python source file for usages of the given tokens.
-    Returns a list of Hit dicts.
-    """
+    index = PyFileIndex()
     try:
         tree = ast.parse(source, filename=file_path)
     except SyntaxError:
-        return []
+        return index
 
-    routes = _extract_routes(tree)
-    call_graph = _build_call_graph(tree)
+    parents: dict[int, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[id(child)] = node
 
-    hits: list[dict] = []
+    module_symbols: dict[int, str] = {}  # top-level "NAME = ..." statements
+    for stmt in tree.body:
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target] if isinstance(stmt, ast.AnnAssign) else []
+        names = [t.id for t in targets if isinstance(t, ast.Name)]
+        if names:
+            module_symbols[id(stmt)] = names[0]
+            index.references.setdefault(names[0], set()).update(_names_used(stmt.value) if stmt.value else set())
 
-    # Build parent map once
-    parent_map: dict[int, ast.AST] = {}
-    for n in ast.walk(tree):
-        for child in ast.iter_child_nodes(n):
-            parent_map[id(child)] = n
-
-    def _symbol_for(node: ast.AST) -> str:
+    def symbol_of(node: ast.AST) -> str:
         current = node
-        while True:
-            parent = parent_map.get(id(current))
-            if parent is None:
-                break
-            if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        while id(current) in parents:
+            parent = parents[id(current)]
+            if isinstance(parent, _SCOPES):
                 return parent.name
+            if id(parent) in module_symbols:
+                return module_symbols[id(parent)]
             current = parent
-        return "<module>"
+        return module_symbols.get(id(node), "<module>")
 
-    def _add_hit(token: str, line: int, usage_kind: str, symbol: str) -> None:
-        endpoints = _reachable_endpoints(symbol, routes, call_graph)
-        hits.append({
+    for node in ast.walk(tree):
+        if isinstance(node, _SCOPES):
+            index.references.setdefault(node.name, set()).update(_names_used(node) - {node.name})
+            if not isinstance(node, ast.ClassDef):
+                for deco in node.decorator_list:
+                    route = _route(deco)
+                    if route:
+                        index.routes.setdefault(node.name, []).append(route)
+
+    seen: set[tuple[int, str, str]] = set()
+
+    def add(token: str, line: int, kind: str, node: ast.AST) -> None:
+        if (line, token, kind) in seen:
+            return
+        seen.add((line, token, kind))
+        index.hits.append({
             "file": file_path,
             "line": line,
             "token": token,
-            "change_ids": change_ids_by_token.get(token, []),
-            "usage_kind": usage_kind,
-            "symbol": symbol,
-            "endpoints": endpoints,
-            "in_tests": file_path.startswith("tests/") or "/tests/" in file_path,
+            "change_ids": tokens[token],
+            "usage_kind": kind,
+            "symbol": symbol_of(node),
+            "endpoints": [],
+            "in_tests": file_path.startswith("tests/"),
         })
 
-    token_set = set(tokens)
-
     for node in ast.walk(tree):
-        # Subscript: obj["token"]
         if isinstance(node, ast.Subscript):
-            if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
-                tok = node.slice.value
-                if tok in token_set:
-                    sym = _symbol_for(node)
-                    _add_hit(tok, node.lineno, "subscript", sym)
-
-        # Call: obj.get("token")
+            key = node.slice
+            if isinstance(key, ast.Constant) and isinstance(key.value, str) and key.value in tokens:
+                add(key.value, node.lineno, "subscript", node)
         elif isinstance(node, ast.Call):
             func = node.func
             if (
@@ -186,53 +116,23 @@ def scan_python_file(
                 and func.attr == "get"
                 and node.args
                 and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str)
+                and node.args[0].value in tokens
             ):
-                tok = node.args[0].value
-                if tok in token_set:
-                    sym = _symbol_for(node)
-                    _add_hit(tok, node.lineno, "get_call", sym)
-
-        # Attribute access: obj.token
-        elif isinstance(node, ast.Attribute):
-            if node.attr in token_set:
-                sym = _symbol_for(node)
-                _add_hit(node.attr, node.lineno, "attribute", sym)
-
-        # AnnAssign: name: Type = ...
-        elif isinstance(node, ast.AnnAssign):
-            target = node.target
-            if isinstance(target, ast.Name) and target.id in token_set:
-                sym = _symbol_for(node)
-                _add_hit(target.id, node.lineno, "model_field", sym)
-
-        # keyword argument: func(token=...)
-        elif isinstance(node, ast.keyword):
-            if node.arg and node.arg in token_set:
-                # Get line from parent
-                sym = _symbol_for(node)
-                line = getattr(node, "lineno", 0)
-                _add_hit(node.arg, line, "keyword", sym)
-
-        # String constant (exact match or longer whole-word)
+                add(node.args[0].value, node.lineno, "get_call", node)
+            for kw in node.keywords:
+                if kw.arg in tokens:
+                    add(kw.arg, kw.value.lineno, "keyword", node)
+        elif isinstance(node, ast.Attribute) and node.attr in tokens:
+            add(node.attr, node.lineno, "attribute", node)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id in tokens:
+            add(node.target.id, node.lineno, "model_field", node)
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            val = node.value
-            for tok in token_set:
-                if val == tok:
-                    sym = _symbol_for(node)
-                    _add_hit(tok, node.lineno, "literal", sym)
-                elif (
-                    len(val) > len(tok)
-                    and re.search(r"\b" + re.escape(tok) + r"\b", val)
-                ):
-                    sym = _symbol_for(node)
-                    _add_hit(tok, node.lineno, "embedded_text", sym)
+            index.constants.append((symbol_of(node), node.value))
+            if node.value in tokens:
+                add(node.value, node.lineno, "literal", node)
+                continue
+            for tok in tokens:
+                if len(node.value) > len(tok) and re.search(rf"\b{re.escape(tok)}\b", node.value):
+                    add(tok, node.lineno, "embedded_text", node)
 
-        # Module-level assignment: NAME = ...
-        elif isinstance(node, ast.Assign):
-            for tgt in node.targets:
-                if isinstance(tgt, ast.Name) and tgt.id in token_set:
-                    sym = _symbol_for(node)
-                    _add_hit(tgt.id, node.lineno, "attribute", sym)
-
-    return hits
+    return index

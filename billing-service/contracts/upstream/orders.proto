@@ -1,6 +1,5 @@
-// Orders gRPC contract v2 - owned by orders-service (upstream).
+// Orders gRPC contract v1 - owned by orders-service (upstream).
 // Reference copy for SyncSnitch - do not edit.
-// Updated by SyncSnitch run w-20260926-051730-a2e3 from branch1.
 syntax = "proto3";
 
 package orders;
@@ -16,28 +15,15 @@ message GetOrderSummaryRequest {
 
 enum OrderStatus {
   ORDER_STATUS_UNSPECIFIED = 0;
-  ORDER_STATUS_AWAITING_PAYMENT = 1;  // was ORDER_STATUS_PENDING in v1
+  ORDER_STATUS_PENDING = 1;
   ORDER_STATUS_PAID = 2;
   ORDER_STATUS_SHIPPED = 3;
   ORDER_STATUS_CANCELLED = 4;
 }
 
-message Customer {
-  string display_name = 1;
-  string id = 2;
-}
-
-message Money {
-  int64 amount_minor = 1;  // integer minor units (e.g. 1999 for $19.99)
-  string currency = 2;
-}
-
 message OrderSummary {
   string order_id = 1;
-  reserved 2, 3;               // v1: customer_name, total_price — removed in v2
-  reserved "customer_name", "total_price";
+  string customer_name = 2;
+  double total_price = 3;  // major units (USD), e.g. 19.99
   OrderStatus status = 4;
-  Customer customer = 5;
-  Money total = 6;
-  string shipping_eta = 7;
 }

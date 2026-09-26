@@ -65,8 +65,15 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
         print(f"Error resolving git refs: {e}", file=sys.stderr)
         return 2
 
+    # The upstream may be a sub-folder of a monorepo (kshiti26-11/demo/orders-service): a worktree is always the
+    # whole repository, so the upstream service lives at <worktree>/<prefix>.
+    _, prefix_out = runner.run(["git", "-C", str(upstream), "rev-parse", "--show-prefix"])
+    upstream_prefix = prefix_out.strip().splitlines()[0] if prefix_out.strip() else ""
+
     wt_v1 = run_folder / "upstream-v1"
     wt_v2 = run_folder / "upstream-v2"
+    svc_v1 = wt_v1 / upstream_prefix
+    svc_v2 = wt_v2 / upstream_prefix
     results_dir = run_folder / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -74,16 +81,19 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
     checks: list[dict[str, Any]] = []
 
     try:
-        # Create worktrees
-        runner.run(["git", "-C", str(upstream), "worktree", "add", "--detach", str(wt_v1), base_sha])
-        worktrees_created.append(wt_v1)
-        runner.run(["git", "-C", str(upstream), "worktree", "add", "--detach", str(wt_v2), head_sha])
-        worktrees_created.append(wt_v2)
+        # Create worktrees (a stale one from an earlier run with the same id is removed first)
+        for wt, sha in ((wt_v1, base_sha), (wt_v2, head_sha)):
+            runner.run(["git", "-C", str(upstream), "worktree", "remove", "--force", str(wt)])
+            code_wt, out_wt = runner.run(["git", "-C", str(upstream), "worktree", "add", "--detach", str(wt), sha])
+            if code_wt != 0:
+                raise RuntimeError(f"git worktree add failed for {wt}: {out_wt.strip()}")
+            worktrees_created.append(wt)
 
         # Check V1: consumer unit tests
         code_v1, out_v1 = runner.run(["uv", "run", "pytest", "-q"], cwd=consumer)
         last_lines = [line.strip() for line in out_v1.strip().splitlines() if line.strip()][-15:]
-        details_v1 = "\n".join(last_lines) if last_lines else "pytest completed"
+        summary_lines = [ln for ln in last_lines if re.search(r"\d+ (passed|failed|error)", ln)]
+        details_v1 = summary_lines[-1].strip("= ") if summary_lines else ("\n".join(last_lines) or "pytest completed")
         checks.append({
             "id": "V1",
             "name": "consumer unit tests",
@@ -101,10 +111,7 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
                 "details": "no v2 fixtures found",
             })
         else:
-            v2_openapi_file = wt_v2 / "contracts" / "openapi.yaml"
-            if not v2_openapi_file.exists():
-                v2_openapi_file = Path("contracts/reference/v2/openapi.yaml")
-
+            v2_openapi_file = svc_v2 / "contracts" / "openapi.yaml"
             if not v2_openapi_file.exists():
                 checks.append({
                     "id": "V2",
@@ -151,7 +158,8 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
                 })
                 continue
 
-            wt = wt_v1 if ver == "v1" else wt_v2
+            wt = svc_v1 if ver == "v1" else svc_v2
+            (results_dir / f"junit-{ver}.xml").unlink(missing_ok=True)  # never read a stale result
             project_raw = f"ss-{run_id}-{ver}".lower()
             project = re.sub(r"[^a-z0-9-]", "", project_raw)
 
@@ -260,8 +268,17 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
             })
 
         # Check V6: diff scope
+        # git prints repo-root paths; inside a monorepo strip the consumer's prefix, and anything outside the
+        # consumer folder keeps its full path so it is reported as out of scope.
+        _, cprefix_out = runner.run(["git", "-C", str(consumer), "rev-parse", "--show-prefix"])
+        consumer_prefix = cprefix_out.strip().splitlines()[0] if cprefix_out.strip() else ""
+
+        def scoped(out: str) -> list[str]:
+            paths = [line.strip().replace("\\", "/") for line in out.strip().splitlines() if line.strip()]
+            return [p[len(consumer_prefix):] if consumer_prefix and p.startswith(consumer_prefix) else p for p in paths]
+
         code_diff, out_diff = runner.run(["git", "-C", str(consumer), "diff", "--name-only", f"{consumer_base_sha}...HEAD"])
-        changed_paths = [line.strip().replace("\\", "/") for line in out_diff.strip().splitlines() if line.strip()]
+        changed_paths = scoped(out_diff)
 
         if not changed_paths:
             checks.append({
@@ -272,7 +289,7 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
             })
         else:
             code_del, out_del = runner.run(["git", "-C", str(consumer), "diff", "--name-only", "--diff-filter=D", f"{consumer_base_sha}...HEAD"])
-            deleted_paths = [line.strip().replace("\\", "/") for line in out_del.strip().splitlines() if line.strip()]
+            deleted_paths = scoped(out_del)
             del_tests = [p for p in deleted_paths if p.startswith("tests/")]
 
             allowed_prefixes = ("billing/", "contracts/upstream/", "tests/", "scripts/")
@@ -305,6 +322,9 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
                     "details": f"{len(changed_paths)} files changed within scope",
                 })
 
+    except RuntimeError as err:
+        print(f"Error: {err}", file=sys.stderr)
+        return 2
     finally:
         # Cleanup worktrees
         for wt in worktrees_created:

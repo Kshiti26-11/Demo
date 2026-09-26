@@ -1,94 +1,74 @@
 ## Why this PR exists
 
-The upstream orders-service has shipped contract changes between `{{ upstream.base }}` and
-`{{ upstream.head }}`. This companion PR makes the billing-service consumer tolerant of
-those changes before the upstream deploy.
-
----
+{% if upstream_pr_url %}
+Upstream PR {{ upstream_pr_url }} changes the Orders contract
+{% else %}
+The upstream Orders contract changed
+{% endif %}
+(`{{ upstream.base }}` → `{{ upstream.head }}`): **{{ summary.breaking }} breaking** of {{ summary.total }} changes
+(REST {{ breaking_by_surface.rest }} · gRPC {{ breaking_by_surface.grpc }} · DB {{ breaking_by_surface.db }}).
+This companion PR makes the consumer a tolerant reader, so it works against contract v1 **and** v2 during the rollout.
 
 ## Contract drift
 
-Run ID: `{{ run_id }}`
-{% if upstream_pr_url %}Upstream PR: {{ upstream_pr_url }}{% endif %}
-
-| Surface | Total | Breaking |
-|---------|-------|---------|
-| REST    | {{ summary.by_surface.rest }} | {{ breaking_by_surface.rest }} |
-| gRPC    | {{ summary.by_surface.grpc }} | {{ breaking_by_surface.grpc }} |
-| DB      | {{ summary.by_surface.db }} | {{ breaking_by_surface.db }} |
-| **All** | **{{ summary.total }}** | **{{ summary.breaking }}** |
-
-{% if breaking_changes %}
-### Breaking changes
-
-| ID | Surface | Kind | Location | Old → New |
-|----|---------|------|----------|-----------|
-{% for c in breaking_changes %}| `{{ c.id }}` | {{ c.surface }} | {{ c.kind }} | `{{ c.location }}` | `{{ c.old }}` → `{{ c.new }}` |
+| Surface | Kind | Location | Old → New | Breaking |
+|---|---|---|---|---|
+{% for c in changes if c.kind != "data_update" %}
+| {{ c.surface }} | {{ c.kind }} | `{{ c.location }}` | {{ c.old or "–" }} → {{ c.new or "–" }} | {{ "⚠️ yes" if c.breaking else "no" }} |
 {% endfor %}
-{% endif %}
-
----
 
 ## Impact
 
-{% if candidates %}
-**Consumer:** `{{ candidates.consumer }}`
-
-Affected files: {{ candidates.summary.files }}
-Total hits: {{ candidates.summary.hits }}
-
-{% if candidates.summary.endpoints %}
-Affected endpoints:
-{% for ep in candidates.summary.endpoints %}
-- `{{ ep }}`
+{% if impact and impact.endpoints %}
+| Endpoint | Surface | Failure | Why |
+|---|---|---|---|
+{% for e in impact.endpoints %}
+| `{{ e.endpoint }}` | {{ e.surface }} | {{ e.failure }} | {{ e.why }} |
 {% endfor %}
-{% endif %}
-
-{% if candidates.hits %}
-| File | Line | Token | Usage | Endpoints |
-|------|------|-------|-------|-----------|
-{% for h in candidates.hits[:20] %}| `{{ h.file }}` | {{ h.line }} | `{{ h.token }}` | {{ h.usage_kind }} | {{ h.endpoints | join(', ') }} |
+{% elif affected_files %}
+| File | Endpoints |
+|---|---|
+{% for f in affected_files %}
+| `{{ f.file }}` | {{ f.endpoints | join(", ") or "–" }} |
 {% endfor %}
-{% if candidates.hits | length > 20 %}*({{ candidates.hits | length - 20 }} more hits omitted)*{% endif %}
-{% endif %}
 {% else %}
-*No trace data available.*
+No consumer usages were traced.
 {% endif %}
-
----
 
 ## Verification
 
 {% if verification %}
-{% for v in verification %}
-- **{{ v.check }}**: `{{ v.result }}` — {{ v.note }}
+| Check | Name | Result | Details |
+|---|---|---|---|
+{% for v in verification.checks %}
+| {{ v.id }} | {{ v.name }} | {{ icons.get(v.status, v.status) }} | {{ v.details | replace("\n", " ") }} |
 {% endfor %}
+
+**Verdict:** {{ (verdict.verdict if verdict else verification.summary.verdict) | upper }}
+{% if verdict and verdict.reasons %}
+{% for r in verdict.reasons %}
+- {{ r }}
+{% endfor %}
+{% endif %}
 {% else %}
-*Verification not yet run — run `/syncsnitch {{ upstream_pr_url }}` in IBM Bob.*
+Not verified yet: run `syncsnitch verify`.
 {% endif %}
-
-{% if verdict %}
-**Verdict:** {{ verdict.status }} — {{ verdict.reason }}
-{% endif %}
-
----
 
 ## Migration notes
 
-- All changes follow a **tolerant reader** pattern.
-- No breaking changes are deployed without a migration window.
-
----
+{% if impact and impact.migration_notes %}
+{{ impact.migration_notes }}
+{% else %}
+The consumer reads both contract versions, so it can be merged before upstream v2 is deployed.
+{% endif %}
 
 ## Rollout plan
 
-1. merge tolerant reader
-2. deploy upstream v2
-3. remove v1 paths in cleanup PR
-
----
+1. Merge this tolerant reader.
+2. Deploy upstream v2.
+3. Remove the v1 paths in a cleanup PR.
 
 ## Evidence
 
-- Run ID: `{{ run_id }}`
+- SyncSnitch run `{{ run_id }}`
 - Built with IBM Bob - see bob_sessions/ in kshiti26-11/demo

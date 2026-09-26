@@ -1,36 +1,26 @@
 <!-- syncsnitch -->
 ### SyncSnitch found contract drift
 
-Run ID: `{{ run_id }}`
-{% if upstream_pr_url %}Upstream PR: {{ upstream_pr_url }}{% endif %}
-
-**{{ summary.breaking }} breaking change(s)** across {{ summary.total }} total changes.
-
-| Surface | Breaking |
-|---------|---------|
-| REST | {{ breaking_by_surface.rest }} |
-| gRPC | {{ breaking_by_surface.grpc }} |
-| DB | {{ breaking_by_surface.db }} |
+**{{ summary.breaking }} breaking** of {{ summary.total }} changes · REST {{ breaking_by_surface.rest }} · gRPC {{ breaking_by_surface.grpc }} · DB {{ breaking_by_surface.db }} (run `{{ run_id }}`)
 
 {% if breaking_changes %}
-#### Breaking changes
-
-| Kind | Location | Old → New |
-|------|----------|-----------|
-{% for c in breaking_changes %}| {{ c.kind }} | `{{ c.location }}` | `{{ c.old }}` → `{{ c.new }}` |
+| Surface | Kind | Location | Old → New |
+|---|---|---|---|
+{% for c in breaking_changes %}
+| {{ c.surface }} | {{ c.kind }} | `{{ c.location }}` | {{ c.old or "–" }} → {{ c.new or "–" }} |
 {% endfor %}
 {% endif %}
 
-{% if candidates %}
-#### Affected consumer files
+{% if affected_files %}
+**Affected consumer files** ({{ candidates.summary.hits }} usages):
 
-Files: {{ candidates.summary.files }} · Hits: {{ candidates.summary.hits }}
+{% for f in affected_files %}
+- `{{ f.file }}`{% if f.endpoints %} → {{ f.endpoints | join(", ") }}{% endif %}
 
-{% if candidates.summary.endpoints %}
-Affected endpoints: {{ candidates.summary.endpoints | join(', ') }}
+{% endfor %}
 {% endif %}
+{% if candidates and candidates.summary.endpoints %}
+**Affected endpoints:** {{ candidates.summary.endpoints | join(", ") }}
 {% endif %}
 
----
-
-Run `/syncsnitch {{ upstream_pr_url or "<PR URL>" }}` in IBM Bob to generate a verified companion PR.
+Run /syncsnitch {{ upstream_pr_url or "<PR URL>" }} in IBM Bob to generate a verified companion PR.

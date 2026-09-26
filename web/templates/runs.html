@@ -2,7 +2,8 @@
 {% block title %}SyncSnitch Runs{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>Contract Drift Verification Runs</h2>
+  <h2>Case files</h2>
+  <span class="label">Runs replay</span>
   <table>
     <thead>
       <tr>
@@ -26,9 +27,9 @@
         <td><a href="{{ r.companion_pr_url }}" target="_blank" style="color:var(--accent);">Companion PR</a></td>
         <td>
           {% if r.verdict and r.verdict.verdict == 'green' %}
-          <span class="badge badge-human">GREEN</span>
+          <span class="stamp green sm">Cleared</span>
           {% else %}
-          <span class="badge badge-breaking">RED</span>
+          <span class="stamp red sm">Guilty</span>
           {% endif %}
         </td>
         <td><a href="/runs/{{ r.run_id }}" class="btn btn-secondary" style="padding:0.3rem 0.8rem; font-size:0.85rem;">View Replay</a></td>

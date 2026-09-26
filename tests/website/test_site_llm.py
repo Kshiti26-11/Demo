@@ -154,7 +154,36 @@ class FakeGemini:
                                                    "total_tokens": USAGE}})
 
 
-@pytest.fixture(params=["gemini", "grok", "claude"])
+class FakeGroq:
+    """OpenAI-compatible chat completions (GroqCloud): the whole conversation arrives every turn, no provider extras."""
+    provider = "groq"
+
+    def __init__(self):
+        self.requests: list[dict] = []
+
+    def results(self) -> dict:
+        return {m["tool_call_id"]: {"content": m["content"], "error": m["content"].startswith("ERROR: ")}
+                for q in self.requests for m in q["body"]["messages"] if m["role"] == "tool"}
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        self.requests.append({"url": str(request.url), "headers": dict(request.headers), "body": body})
+        msgs = body["messages"]
+        agent, prompt = agent_of(msgs[0]["content"]), msgs[1]["content"]
+        turn = sum(1 for m in msgs if m["role"] == "assistant")
+        items, done = plan(agent, prompt, turn)
+        texts = [i[1] for i in items if i[0] == "text"]
+        calls = [{"id": i[1], "type": "function", "function": {"name": i[2], "arguments": json.dumps(i[3])}}
+                 for i in items if i[0] == "call"]
+        message = {"role": "assistant", "content": "\n".join(texts) or None, **({"tool_calls": calls} if calls else {})}
+        return httpx.Response(200, json={"id": f"chat_{agent}_{turn}", "object": "chat.completion",
+                                         "choices": [{"index": 0, "message": message,
+                                                      "finish_reason": "stop" if done else "tool_calls"}],
+                                         "usage": {"prompt_tokens": 1500, "completion_tokens": 200,
+                                                   "total_tokens": USAGE}})
+
+
+@pytest.fixture(params=["gemini", "groq", "grok", "claude"])
 def api(request, env, monkeypatch):  # noqa: F811 - the env fixture from test_site_agents
     provider = request.param
     monkeypatch.setenv("SYNCSNITCH_AGENT_BACKEND", provider)
@@ -162,10 +191,11 @@ def api(request, env, monkeypatch):  # noqa: F811 - the env fixture from test_si
     for name in ("ANTHROPIC_BASE_URL", "XAI_BASE_URL", "OPENAI_BASE_URL"):  # the shell's own settings are ignored
         monkeypatch.setenv(name, "http://127.0.0.1:1/not-this")
     for name in ("SYNCSNITCH_ANTHROPIC_BASE_URL", "SYNCSNITCH_XAI_BASE_URL", "SYNCSNITCH_GEMINI_BASE_URL",
-                 "SYNCSNITCH_TOKEN_BUDGET", "SYNCSNITCH_GROK_MODEL", "SYNCSNITCH_GEMINI_MODEL",
+                 "SYNCSNITCH_GROQ_BASE_URL", "SYNCSNITCH_TOKEN_BUDGET", "SYNCSNITCH_GROK_MODEL",
+                 "SYNCSNITCH_GEMINI_MODEL", "SYNCSNITCH_GROQ_MODEL",
                  *(v["key"] for k, v in llm_agent.PROVIDERS.items() if k != provider)):
         monkeypatch.delenv(name, raising=False)
-    fake = {"gemini": FakeGemini, "grok": FakeGrok, "claude": FakeClaude}[provider]()
+    fake = {"gemini": FakeGemini, "groq": FakeGroq, "grok": FakeGrok, "claude": FakeClaude}[provider]()
     monkeypatch.setattr(llm_agent, "_client", lambda: httpx.Client(transport=httpx.MockTransport(fake)))
     return fake
 
@@ -232,6 +262,20 @@ def test_gemini_requests_use_openai_compatible_chat(env, api):  # noqa: F811
     assert first["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     assert [m["role"] for m in first["body"]["messages"]] == ["system", "user"]
     assert "Google Gemini" in first["body"]["messages"][0]["content"]
+    assert all(t["type"] == "function" and t["function"]["parameters"]["type"] == "object"
+               for t in first["body"]["tools"])
+    assert [m["role"] for m in follow["body"]["messages"]] == ["system", "user", "assistant", "tool", "tool"]
+
+
+def test_groq_requests_use_openai_compatible_chat(env, api):  # noqa: F811
+    if api.provider != "groq":
+        pytest.skip("Groq only")
+    run_agents(env)
+    first, follow = api.requests[0], api.requests[1]
+    assert first["headers"]["authorization"] == "Bearer test-groq-key"
+    assert first["url"] == "https://api.groq.com/openai/v1/chat/completions"
+    assert [m["role"] for m in first["body"]["messages"]] == ["system", "user"]
+    assert "Groq" in first["body"]["messages"][0]["content"] and "Groq Groq" not in first["body"]["messages"][0]["content"]
     assert all(t["type"] == "function" and t["function"]["parameters"]["type"] == "object"
                for t in first["body"]["tools"])
     assert [m["role"] for m in follow["body"]["messages"]] == ["system", "user", "assistant", "tool", "tool"]
@@ -311,6 +355,7 @@ def test_engine_choice():
     assert agents.choose_backend({"XAI_API_KEY": "k", "SYNCSNITCH_AGENT_BACKEND": "grok"}) == ("grok", [])
     assert agents.choose_backend({"XAI_API_KEY": "k"})[0] in ("bob", "grok")  # auto: the first engine set up
     assert agents.choose_backend({"GEMINI_API_KEY": "k", "SYNCSNITCH_AGENT_BACKEND": "gemini"}) == ("gemini", [])
+    assert agents.choose_backend({"GROQ_API_KEY": "k", "SYNCSNITCH_AGENT_BACKEND": "groq"}) == ("groq", [])
     assert agents.choose_backend({"XAI_API_KEY": "k", "ANTHROPIC_API_KEY": "k",
                                   "SYNCSNITCH_AGENT_BACKEND": "claude"}) == ("claude", [])
     missing = agents.choose_backend({"SYNCSNITCH_AGENT_BACKEND": "grok"})[1]
@@ -318,11 +363,13 @@ def test_engine_choice():
 
 
 def test_the_shell_s_base_urls_are_ignored(monkeypatch):
-    for name in ("ANTHROPIC_BASE_URL", "XAI_BASE_URL", "OPENAI_BASE_URL", "GEMINI_BASE_URL"):
+    for name in ("ANTHROPIC_BASE_URL", "XAI_BASE_URL", "OPENAI_BASE_URL", "GEMINI_BASE_URL", "GROQ_BASE_URL"):
         monkeypatch.setenv(name, "http://proxy.example")
-    for name in ("SYNCSNITCH_ANTHROPIC_BASE_URL", "SYNCSNITCH_XAI_BASE_URL", "SYNCSNITCH_GEMINI_BASE_URL"):
+    for name in ("SYNCSNITCH_ANTHROPIC_BASE_URL", "SYNCSNITCH_XAI_BASE_URL", "SYNCSNITCH_GEMINI_BASE_URL",
+                 "SYNCSNITCH_GROQ_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
     assert llm_agent.api_url("gemini") == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert llm_agent.api_url("groq") == "https://api.groq.com/openai/v1/chat/completions"
     assert llm_agent.api_url("grok") == "https://api.x.ai/v1/responses"
     assert llm_agent.api_url("claude") == "https://api.anthropic.com/v1/messages"
     monkeypatch.setenv("SYNCSNITCH_XAI_BASE_URL", "https://gateway.example/")
@@ -353,7 +400,7 @@ def test_sandbox_rules(tmp_path):
 
 
 def test_commands_never_see_api_keys(tmp_path, monkeypatch):
-    for name in ("XAI_API_KEY", "ANTHROPIC_API_KEY", "BOB_API_KEY", "GEMINI_API_KEY"):
+    for name in ("XAI_API_KEY", "ANTHROPIC_API_KEY", "BOB_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY"):
         monkeypatch.setenv(name, "secret")
     seen = {}
 
@@ -363,7 +410,7 @@ def test_commands_never_see_api_keys(tmp_path, monkeypatch):
     monkeypatch.setattr(llm_agent.subprocess, "run", fake_run)
     ctx = {"run_dir": tmp_path, "cons_path": tmp_path, "up_path": tmp_path, "up": "", "work": tmp_path}
     llm_agent.Sandbox(ctx, "transformer").run("git status")
-    assert seen and not any(k.startswith(("XAI", "ANTHROPIC", "BOB_", "GEMINI")) for k in seen)
+    assert seen and not any(k.startswith(("XAI", "ANTHROPIC", "BOB_", "GEMINI", "GROQ")) for k in seen)
 
 
 def test_docx_proposals_are_read_as_text():

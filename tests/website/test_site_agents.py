@@ -280,7 +280,7 @@ def test_missing_setup_blocks_the_run_and_says_how_to_fix_it(env, monkeypatch):
     assert agents.start(RUN_ID) is False
     s = state(env)
     assert s["phase"] == "blocked" and s["runner"]["can_start"] is False
-    assert [p["id"] for p in s["runner"]["problems"]] == ["gemini", "grok", "claude", "bob"]  # any engine will do
+    assert [p["id"] for p in s["runner"]["problems"]] == ["gemini", "groq", "grok", "claude", "bob"]  # any engine will do
     assert s["runner"]["problems"][0]["fix"] == "bash scripts/gemini_setup.sh"
     r = env["client"].post(f"/api/live/{RUN_ID}/agents")
     assert r.status_code == 409 and "gemini_setup.sh" in r.json()["detail"]

@@ -1,4 +1,4 @@
-"""API models as the SyncSnitch agent engine, instead of IBM Bob Shell: Gemini (Google), Grok (xAI) or Claude.
+"""API models as the SyncSnitch agent engine, instead of IBM Bob Shell: Gemini (Google), Groq, Grok (xAI) or Claude.
 
 The same three agents with the same definitions: the role and instructions of each custom mode in
 .bob/custom_modes.yaml plus the rules in .bob/rules/ and .bob/rules-<mode>/, run through the provider's API with a
@@ -6,6 +6,8 @@ few sandboxed tools. The runner (agents.py) calls run() for S3, S4 and S6 exactl
 
   gemini  Google, OpenAI-compatible chat  POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
           (GEMINI_API_KEY, SYNCSNITCH_GEMINI_MODEL; has a free tier, whose content Google may use to improve products)
+  groq    GroqCloud, OpenAI-compatible chat  POST https://api.groq.com/openai/v1/chat/completions
+          (GROQ_API_KEY, SYNCSNITCH_GROQ_MODEL; free tier, fast open-weight models)
   grok    xAI Responses API     POST https://api.x.ai/v1/responses   (XAI_API_KEY, SYNCSNITCH_GROK_MODEL)
   claude  Anthropic Messages    POST https://api.anthropic.com/v1/messages (ANTHROPIC_API_KEY, SYNCSNITCH_CLAUDE_MODEL)
 
@@ -14,9 +16,9 @@ the Verifier only verdict.json, the Transformer only files inside the consumer f
 accepts `uv run pytest`, `uv run python scripts/regen_stubs.py` and git (writes only inside the consumer), chained
 with `&&` and `cd`, and nothing else (no pipes, redirects or other programs).
 
-Keys and models live in .env.local (scripts/gemini_setup.sh, grok_setup.sh, claude_setup.sh). The API address can only
-be changed with SYNCSNITCH_GEMINI_BASE_URL / SYNCSNITCH_XAI_BASE_URL / SYNCSNITCH_ANTHROPIC_BASE_URL; generic *_BASE_URL
-variables of the surrounding shell are deliberately ignored.
+Keys and models live in .env.local (scripts/gemini_setup.sh, groq_setup.sh, grok_setup.sh, claude_setup.sh). The API
+address can only be changed with SYNCSNITCH_GEMINI_BASE_URL / SYNCSNITCH_GROQ_BASE_URL / SYNCSNITCH_XAI_BASE_URL /
+SYNCSNITCH_ANTHROPIC_BASE_URL; generic *_BASE_URL variables of the surrounding shell are deliberately ignored.
 """
 from __future__ import annotations
 
@@ -43,6 +45,10 @@ PROVIDERS = {
                "default_model": "gemini-3.8-flash", "base_env": "SYNCSNITCH_GEMINI_BASE_URL",
                "base": "https://generativelanguage.googleapis.com", "path": "/v1beta/openai/chat/completions",
                "setup": "bash scripts/gemini_setup.sh", "console": "https://aistudio.google.com/apikey"},
+    "groq": {"label": "Groq", "vendor": "Groq", "key": "GROQ_API_KEY", "model_env": "SYNCSNITCH_GROQ_MODEL",
+             "default_model": "llama-3.1-8b-instant", "base_env": "SYNCSNITCH_GROQ_BASE_URL",
+             "base": "https://api.groq.com", "path": "/openai/v1/chat/completions",
+             "setup": "bash scripts/groq_setup.sh", "console": "https://console.groq.com/keys"},
     "grok": {"label": "Grok", "vendor": "xAI", "key": "XAI_API_KEY", "model_env": "SYNCSNITCH_GROK_MODEL",
              "default_model": "grok-4.7", "base_env": "SYNCSNITCH_XAI_BASE_URL", "base": "https://api.x.ai",
              "path": "/v1/responses", "setup": "bash scripts/grok_setup.sh", "console": "https://console.x.ai"},
@@ -56,7 +62,7 @@ MAX_OUTPUT_TOKENS = 16000
 MAX_TURNS = {"tracer": 30, "transformer": 60, "verifier": 12}
 MODES = {"tracer": "syncsnitch-tracer", "transformer": "syncsnitch-transformer", "verifier": "syncsnitch-verifier"}
 SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache"}
-SECRET_ENV = ("ANTHROPIC", "XAI", "OPENAI", "GEMINI", "GOOGLE_API", "BOB_", "GITHUB_TOKEN", "GH_TOKEN", "CLAUDE")
+SECRET_ENV = ("ANTHROPIC", "XAI", "OPENAI", "GEMINI", "GOOGLE_API", "GROQ", "BOB_", "GITHUB_TOKEN", "GH_TOKEN", "CLAUDE")
 GIT_READ = {"status", "diff", "log", "show", "ls-files", "rev-parse", "blame"}
 GIT_WRITE = {"add", "commit", "rm", "mv", "restore", "checkout"}
 UV_FLAGS = {"--frozen", "--quiet", "-q", "--offline"}
@@ -99,8 +105,9 @@ def system_prompt(agent: str, provider: str, model: str) -> str:
         for rule in (sorted(folder.glob("*.md")) if folder.is_dir() else []):
             parts.append(rule.read_text(encoding="utf-8").strip())
     p = PROVIDERS[provider]
+    vendor = f"{p['vendor']} " if p["vendor"] != p["label"] else ""  # avoid "Groq Groq"
     parts.append(
-        f"You are running as {model} ({p['vendor']} {p['label']}) through the SyncSnitch website, not inside IBM "
+        f"You are running as {model} ({vendor}{p['label']}) through the SyncSnitch website, not inside IBM "
         "Bob. Work only through the tools you are given. Paths are relative to the workspace root (the SyncSnitch "
         "repo). Do the one step you are asked for, never ask questions, keep replies short. If a rule mentions a "
         "Bob-Session commit trailer, use the trailer given in the task instead.")
@@ -116,7 +123,7 @@ def tool_specs(provider: str, names: list[str]) -> list[dict]:
     """The tool definitions in the provider's format (Anthropic: input_schema; xAI Responses: flat functions)."""
     if provider == "claude":
         return [TOOLS[n] for n in names]
-    if provider == "gemini":  # OpenAI chat-completions shape
+    if provider in ("gemini", "groq"):  # OpenAI chat-completions shape
         return [{"type": "function", "function": {"name": TOOLS[n]["name"], "description": TOOLS[n]["description"],
                                                   "parameters": TOOLS[n]["input_schema"]}} for n in names]
     return [{"type": "function", "name": TOOLS[n]["name"], "description": TOOLS[n]["description"],
@@ -347,7 +354,7 @@ class Sandbox:
 def _post(client: httpx.Client, provider: str, key: str, body: dict) -> dict:
     p = PROVIDERS[provider]
     headers = ({"x-api-key": key, "anthropic-version": ANTHROPIC_VERSION} if provider == "claude"
-               else {"authorization": f"Bearer {key}"})  # xAI and Gemini's OpenAI-compatible endpoint
+               else {"authorization": f"Bearer {key}"})  # xAI, and the OpenAI-compatible endpoints (Gemini, Groq)
     headers["content-type"] = "application/json"
     attempts = 8
     for attempt in range(attempts):
@@ -482,10 +489,10 @@ class _XAI:
 
 
 class _OpenAIChat:
-    """OpenAI-compatible chat completions (Gemini): the whole conversation every turn. Assistant messages are sent
-    back exactly as received, so provider extras (Gemini's thought signatures) survive."""
+    """OpenAI-compatible chat completions (Gemini, Groq): the whole conversation every turn. Assistant messages are
+    sent back exactly as received, so provider extras (e.g. Gemini's thought signatures) survive."""
 
-    def __init__(self, client, key, model, system, tools, prompt, provider="gemini"):
+    def __init__(self, client, key, model, system, tools, prompt, provider):
         self.client, self.key, self.model, self.tools, self.provider = client, key, model, tools, provider
         self.messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
         self.n = 0
@@ -543,8 +550,13 @@ def run(provider: str, ctx: dict, agent: str, prompt: str, cap_tokens: int, env:
     box = Sandbox(ctx, agent)
     started, tool_calls = time.monotonic(), 0
     with _client() as client:
-        session = {"claude": _Anthropic, "grok": _XAI, "gemini": _OpenAIChat}[provider](
-            client, key, model, system_prompt(agent, provider, model), tool_specs(provider, AGENT_TOOLS[agent]), prompt)
+        sys_prompt, specs = system_prompt(agent, provider, model), tool_specs(provider, AGENT_TOOLS[agent])
+        if provider == "claude":
+            session = _Anthropic(client, key, model, sys_prompt, specs, prompt)
+        elif provider == "grok":
+            session = _XAI(client, key, model, sys_prompt, specs, prompt)
+        else:  # OpenAI-compatible chat completions: gemini, groq
+            session = _OpenAIChat(client, key, model, sys_prompt, specs, prompt, provider)
         results, note = None, None
         while True:
             if res.turns >= MAX_TURNS[agent]:
@@ -612,15 +624,15 @@ def ping(provider: str, env: dict) -> str:
             resp = _post(client, provider, env[p["key"]], {"model": model, "max_tokens": 16,
                                                            "messages": [{"role": "user", "content": ask}]})
             text = "".join(b.get("text", "") for b in resp.get("content") or [] if b.get("type") == "text")
-        elif provider == "gemini":
-            resp = _post(client, provider, env[p["key"]], {"model": model, "max_tokens": 512,
-                                                           "messages": [{"role": "user", "content": ask}]})
-            text = str(((resp.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
-        else:
+        elif provider == "grok":  # xAI Responses API
             resp = _post(client, provider, env[p["key"]], {"model": model, "input": [{"role": "user", "content": ask}],
                                                            "max_output_tokens": 512, "store": False})
             text = "".join(part.get("text", "") for item in resp.get("output") or [] if item.get("type") == "message"
                            for part in item.get("content") or [])
+        else:  # OpenAI-compatible chat completions: gemini, groq
+            resp = _post(client, provider, env[p["key"]], {"model": model, "max_tokens": 512,
+                                                           "messages": [{"role": "user", "content": ask}]})
+            text = str(((resp.get("choices") or [{}])[0].get("message") or {}).get("content") or "")
     return f"{model}: {text.strip() or '(no text)'}"
 
 

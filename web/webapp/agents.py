@@ -33,10 +33,11 @@ from . import live, llm_agent
 REPO_ROOT = live.REPO_ROOT
 ENV_FILES = (REPO_ROOT / ".env", REPO_ROOT / ".env.local")  # later files win; real environment variables win over both
 _ENV_KEYS = ("BOB_API_KEY", "BOB_TEAM_ID", "SYNCSNITCH_BOB_BUDGET", "SYNCSNITCH_AGENT_BACKEND", "SYNCSNITCH_TOKEN_BUDGET",
-             "GEMINI_API_KEY", "SYNCSNITCH_GEMINI_MODEL", "XAI_API_KEY", "SYNCSNITCH_GROK_MODEL",
+             "GEMINI_API_KEY", "SYNCSNITCH_GEMINI_MODEL", "GROQ_API_KEY", "SYNCSNITCH_GROQ_MODEL",
+             "XAI_API_KEY", "SYNCSNITCH_GROK_MODEL",
              "ANTHROPIC_API_KEY", "SYNCSNITCH_CLAUDE_MODEL",
              "SYNCSNITCH_CLAUDE_TOKEN_BUDGET")
-ENGINES = ("bob", "gemini", "grok", "claude")  # IBM Bob Shell, or an API model through llm_agent.py
+ENGINES = ("bob", "gemini", "groq", "grok", "claude")  # IBM Bob Shell, or an API model through llm_agent.py
 LABELS = {"bob": "IBM Bob", **{k: v["label"] for k, v in llm_agent.PROVIDERS.items()}}
 UNITS = {"bob": "Bobcoins", **{k: "tokens" for k in llm_agent.PROVIDERS}}
 BOB_SETTINGS = Path.home() / ".bob" / "settings" / "settings.json"
@@ -164,8 +165,8 @@ def _api_problems(env: dict, provider: str) -> list[dict]:
 
 
 def choose_backend(env: dict | None = None) -> tuple[str | None, list[dict]]:
-    """Which engine runs the three agents: SYNCSNITCH_AGENT_BACKEND=bob|gemini|grok|claude, or auto (the first of
-    IBM Bob, Gemini, Grok, Claude that is set up). Returns the engine and what is missing for it."""
+    """Which engine runs the three agents: SYNCSNITCH_AGENT_BACKEND=bob|gemini|groq|grok|claude, or auto (the first of
+    IBM Bob, Gemini, Groq, Grok, Claude that is set up). Returns the engine and what is missing for it."""
     env = local_env() if env is None else env
     pref = (env.get("SYNCSNITCH_AGENT_BACKEND") or "auto").strip().lower()
     missing = {"bob": _bob_problems(env), **{k: _api_problems(env, k) for k in llm_agent.PROVIDERS}}
@@ -177,6 +178,8 @@ def choose_backend(env: dict | None = None) -> tuple[str | None, list[dict]]:
     return None, [
         {"id": "gemini", "text": "No agent engine is set up. Run the agents on Gemini (a free Google AI Studio key; "
                                  "free-tier data may be used by Google)…", "fix": "bash scripts/gemini_setup.sh"},
+        {"id": "groq", "text": "…or on Groq (a free GroqCloud key; fast open-weight models)…",
+         "fix": "bash scripts/groq_setup.sh"},
         {"id": "grok", "text": "…or on Grok (an xAI API key with credits)…", "fix": "bash scripts/grok_setup.sh"},
         {"id": "claude", "text": "…or on Claude (an Anthropic API key with credits)…",
          "fix": "bash scripts/claude_setup.sh"},

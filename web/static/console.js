@@ -371,7 +371,7 @@
     const ts = document.createElement('span'); ts.className = 'ts';
     ts.textContent = `[${new Date(e.ts).toLocaleTimeString([], {hour12: false})}]`;
     const who = document.createElement('span'); who.className = 'who';
-    const engine = {bob: 'IBM Bob', claude: 'Claude', grok: 'Grok', gemini: 'Gemini'}[e.src];
+    const engine = {bob: 'IBM Bob', claude: 'Claude', grok: 'Grok', gemini: 'Gemini', groq: 'Groq'}[e.src];
     who.textContent = engine ? `[${engine} › ${AGENT[e.agent] || e.agent}]` : `[${AGENT[e.agent] || e.agent}]`;
     if (engine) li.classList.add('src-bob', 'src-' + e.src);
     const msg = document.createElement('span'); msg.className = 'msg';

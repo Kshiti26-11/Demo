@@ -29,20 +29,23 @@ The three agents are the custom modes in `.bob/custom_modes.yaml` (role, instruc
 engines; their live output is the log stream:
 - **IBM Bob**: `bob run --mode <agent>` (headless IBM Bob Shell). Budget per run in Bobcoins (`SYNCSNITCH_BOB_BUDGET`, default 5).
 - **Gemini** (free tier: Google AI Studio key, OpenAI-compatible endpoint, `SYNCSNITCH_GEMINI_MODEL`, default
-  `gemini-3.8-flash`; free-tier prompts may be used by Google), **Grok** (xAI Responses API, `SYNCSNITCH_GROK_MODEL`,
-  default `grok-4.7`) or **Claude** (Anthropic Messages API, `SYNCSNITCH_CLAUDE_MODEL`, default `claude-opus-5-5`):
-  the same definitions through `web/webapp/llm_agent.py` with
+  `gemini-3.8-flash`; free-tier prompts may be used by Google), **Groq** (free tier: GroqCloud key, OpenAI-compatible
+  endpoint, `SYNCSNITCH_GROQ_MODEL`, default `llama-3.1-8b-instant`; larger models may need identity verification
+  on the free tier), **Grok** (xAI Responses API,
+  `SYNCSNITCH_GROK_MODEL`, default `grok-4.7`) or **Claude** (Anthropic Messages API, `SYNCSNITCH_CLAUDE_MODEL`,
+  default `claude-opus-5-5`): the same definitions through `web/webapp/llm_agent.py` with
   sandboxed tools (read anywhere in the workspace except `.env`/`.git`; the Tracer writes only `impact.json`, the Verifier
   only `verdict.json`, the Transformer only the consumer folder; commands: `uv run pytest`, `regen_stubs.py`, git; API keys
   never reach the commands). Budget per run in tokens (`SYNCSNITCH_TOKEN_BUDGET`, default 3,000,000).
 
-`SYNCSNITCH_AGENT_BACKEND=bob|gemini|grok|claude` picks the engine (the setup scripts set it; `auto` = the first of
-IBM Bob, Gemini, Grok, Claude that is set up).
+`SYNCSNITCH_AGENT_BACKEND=bob|gemini|groq|grok|claude` picks the engine (the setup scripts set it; `auto` = the first of
+IBM Bob, Gemini, Groq, Grok, Claude that is set up).
 The page names the engine that ran each agent, and commits carry its trailer. A stopped run can be resumed.
 
 **One-time setup** (the page shows what is missing, with the command), then start the site:
 ```bash
 bash scripts/gemini_setup.sh   # Gemini (free tier): saves your Google AI Studio key in .env.local (hidden, gitignored)
+bash scripts/groq_setup.sh     # or Groq (free tier): the same with a GroqCloud API key
 bash scripts/grok_setup.sh     # or Grok: the same with an xAI API key
 bash scripts/claude_setup.sh   # or Claude: the same with an Anthropic API key
 bash scripts/bob_setup.sh      # or IBM Bob: installs Bob Shell, saves your Bob API key, license
@@ -92,5 +95,5 @@ The planning docs, reference contracts and shared scaffolding were prepared with
 **IBM Bob** from the prompts in WORK.md, and every Bob task is exported to `bob_sessions/`. The 2026-09-26 integration fixes
 (CLI flags, monorepo support, endpoint tracing, report/run-artifact, website status display), the paste-a-repo
 analysis page and the local agent runner (`web/webapp/agents.py`, `web/webapp/llm_agent.py`) were written with
-Claude Code. The three agents run on IBM Bob or, when chosen, on Gemini, Grok or Claude; every run records which
+Claude Code. The three agents run on IBM Bob or, when chosen, on Gemini, Groq, Grok or Claude; every run records which
 engine it used.

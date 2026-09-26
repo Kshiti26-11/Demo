@@ -1,0 +1,9 @@
+name: contract-verify
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  syncsnitch:
+    if: startsWith(github.head_ref, 'syncsnitch/')
+    uses: kshiti26-11/demo/.github/workflows/syncsnitch-verify.yml@main

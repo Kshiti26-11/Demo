@@ -3,21 +3,20 @@
 {% block content %}
 <section class="launcher-wrap">
   <form class="launcher" id="launcher" action="/launch" method="post" autocomplete="off">
-    <h1 class="launcher-title">🚀 Launch SyncSnitch on any GitHub PR or Repository</h1>
+    <h1 class="launcher-title">Open a case</h1>
     <p class="launcher-sub">Paste a GitHub pull request or repo link and press <kbd>Enter</kbd> to launch all 3 autonomous subagents</p>
     <div class="launcher-row">
-      <span class="launcher-icon" aria-hidden="true">🔗</span>
       <label for="link" class="sr-only">GitHub pull request or repository link</label>
       <input id="link" name="link" type="text" required spellcheck="false"
              value="{{ link_input or 'https://github.com/kshiti26-11/demo' }}"
              placeholder="https://github.com/owner/orders-service/pull/1">
-      <button type="submit" class="btn btn-primary btn-run" id="launch-btn" aria-label="Run 3 Agents">
-        <span class="spinner" aria-hidden="true"></span><span class="btn-label">Run 3 Agents</span>
+      <button type="submit" class="btn btn-primary btn-run" id="launch-btn" aria-label="Assign detectives">
+        <span class="spinner" aria-hidden="true"></span><span class="btn-label">Assign detectives</span>
       </button>
     </div>
     <p class="launcher-error" id="launch-error" role="alert" {% if not launch_error %}hidden{% endif %}>{{ launch_error or '' }}</p>
     <div class="presets">
-      <span class="presets-label">Quick presets:</span>
+      <span class="presets-label">Cold cases:</span>
       <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo">kshiti26-11/demo (Orders V2 breaking change)</button>
       <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo/tree/branch1">demo @ branch1</button>
       <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo/compare/15f95af...branch1">compare 15f95af...branch1</button>
@@ -44,7 +43,7 @@
 
     <div class="bob-start" id="setup" hidden>
       <div>
-        <h2>⚙️ One-time setup: let this machine run the 3 agents</h2>
+        <h2>One-time setup: let this machine run the 3 agents</h2>
         <p>S1–S2 ran here. The Tracer, Transformer and Verifier are AI agents that this site starts by itself, on
           IBM Bob (Bob Shell), Gemini (free Google AI Studio key), Grok or Claude, with no IDE step. This machine is missing:</p>
         <ol class="setup-list" id="setup-list"></ol>
@@ -72,7 +71,7 @@
 
     <div class="agents">
       <article class="agent agent-1" id="agent-tracer" data-status="queued">
-        <header><span class="agent-no">🔎 Subagent 1</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <header><span class="agent-no">Subagent 1</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
         <h2>Schema Diff &amp; AST Tracer</h2>
         <p class="role">Zero-token diff on REST, gRPC &amp; DB; traces consumer AST reachability.</p>
         <dl class="facts">
@@ -87,7 +86,7 @@
       </article>
 
       <article class="agent agent-2" id="agent-transformer" data-status="queued">
-        <header><span class="agent-no">🛠️ Subagent 2</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <header><span class="agent-no">Subagent 2</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
         <h2>Downstream Code Transformer</h2>
         <p class="role">Synthesizes backward-compatible tolerant reader adapters for the consumer.</p>
         <dl class="facts">
@@ -103,7 +102,7 @@
       </article>
 
       <article class="agent agent-3" id="agent-verifier" data-status="queued">
-        <header><span class="agent-no">✅ Subagent 3</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <header><span class="agent-no">Subagent 3</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
         <h2>Contract Verifier</h2>
         <p class="role">Deterministic judge running the V1–V6 suite in a mock container harness.</p>
         <ul class="checks" id="checks">
@@ -128,7 +127,8 @@
     </div>
 
     <section class="gate" id="gate" hidden>
-      <h2 id="gate-title">🛡️ S7 Human Approval Gate</h2>
+      <h2 id="gate-title">Warrant awaiting signature</h2>
+      <span class="label">Human approval gate</span>
       <p id="gate-desc"></p>
       <p class="gate-note" id="gate-note"></p>
       <div class="gate-actions">
@@ -148,18 +148,19 @@
 </section>
 
 <section class="card pipeline-card">
-  <h2>The S1–S9 Workflow Pipeline</h2>
+  <h2>How a case gets solved</h2>
+  <span class="label">S1–S9 workflow pipeline</span>
   <p class="muted">An upstream team changed a contract. SyncSnitch found every downstream break, generated a backward-compatible fix, proved it in containers and opened a draft PR after a human approved.</p>
   <div class="pipeline-grid">
-    <div class="pipeline-step"><div class="step-id">S1</div><div class="step-name">Detect</div><span class="badge badge-deterministic">0 COINS</span></div>
-    <div class="pipeline-step"><div class="step-id">S2</div><div class="step-name">Trace</div><span class="badge badge-deterministic">0 COINS</span></div>
-    <div class="pipeline-step"><div class="step-id">S3</div><div class="step-name">Tracer</div><span class="badge badge-ai">SUBAGENT</span></div>
-    <div class="pipeline-step"><div class="step-id">S4</div><div class="step-name">Transformer</div><span class="badge badge-ai">SUBAGENT</span></div>
-    <div class="pipeline-step"><div class="step-id">S5</div><div class="step-name">Verify</div><span class="badge badge-deterministic">DOCKER</span></div>
-    <div class="pipeline-step"><div class="step-id">S6</div><div class="step-name">Verifier</div><span class="badge badge-ai">SUBAGENT</span></div>
-    <div class="pipeline-step"><div class="step-id">S7</div><div class="step-name">Gate</div><span class="badge badge-human">HUMAN</span></div>
-    <div class="pipeline-step"><div class="step-id">S8</div><div class="step-name">Draft PR</div><span class="badge badge-deterministic">0 COINS</span></div>
-    <div class="pipeline-step"><div class="step-id">S9</div><div class="step-name">Artifact</div><span class="badge badge-deterministic">0 COINS</span></div>
+    <div class="pipeline-step"><div class="step-id">S1</div><div class="step-name">Dust for prints</div><span class="label">Detect</span><span class="tag free">0 COINS</span></div>
+    <div class="pipeline-step"><div class="step-id">S2</div><div class="step-name">Follow the trail</div><span class="label">Trace</span><span class="tag free">0 COINS</span></div>
+    <div class="pipeline-step"><div class="step-id">S3</div><div class="step-name">The Tracer</div><span class="label">Tracer</span><span class="tag ai">SUBAGENT</span></div>
+    <div class="pipeline-step"><div class="step-id">S4</div><div class="step-name">The Transformer</div><span class="label">Transformer</span><span class="tag ai">SUBAGENT</span></div>
+    <div class="pipeline-step"><div class="step-id">S5</div><div class="step-name">The lab</div><span class="label">Verify</span><span class="tag lab">DOCKER</span></div>
+    <div class="pipeline-step"><div class="step-id">S6</div><div class="step-name">The Verifier</div><span class="label">Verifier</span><span class="tag ai">SUBAGENT</span></div>
+    <div class="pipeline-step"><div class="step-id">S7</div><div class="step-name">The warrant</div><span class="label">Gate</span><span class="tag human">HUMAN</span></div>
+    <div class="pipeline-step"><div class="step-id">S8</div><div class="step-name">File the case</div><span class="label">Draft PR</span><span class="tag free">0 COINS</span></div>
+    <div class="pipeline-step"><div class="step-id">S9</div><div class="step-name">Close the file</div><span class="label">Artifact</span><span class="tag free">0 COINS</span></div>
   </div>
 </section>
 

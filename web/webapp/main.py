@@ -26,7 +26,7 @@ BOBIDE = shutil.which("bobide") or next(
 
 def live_badge(request: Request) -> str:
     """The header badge: where this site is actually serving from."""
-    return "LIVE" if live.ON_VERCEL or not request.url.port else f"LIVE :{request.url.port}"
+    return "LIVE"
 
 
 templates.env.globals["live_badge"] = live_badge

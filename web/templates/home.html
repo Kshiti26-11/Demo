@@ -1,22 +1,31 @@
 {% extends "base.html" %}
 {% block title %}{% if run_id %}Run {{ run_id }} — {% endif %}SyncSnitch — Contract Drift Agents{% endblock %}
 {% block content %}
-<section class="launcher-wrap">
+<section class="launcher-wrap folder">
+  <span class="folder-tab" aria-hidden="true">New case</span>
   <form class="launcher" id="launcher" action="/launch" method="post" autocomplete="off">
-    <h1 class="launcher-title">Open a case</h1>
+    <div class="launcher-head">
+      <div>
+        <p class="launcher-kicker">Every breaking change leaves fingerprints</p>
+        <h1 class="launcher-title">Open a case</h1>
+        <span class="label">Start a run: paste a link, the 3 AI subagents take it from there</span>
+      </div>
+      <span class="stamp lg launcher-stamp" aria-hidden="true">Human-gated</span>
+    </div>
     <p class="launcher-sub">Paste a GitHub pull request or repo link and press <kbd>Enter</kbd> to launch all 3 autonomous subagents</p>
     <div class="launcher-row">
       <label for="link" class="sr-only">GitHub pull request or repository link</label>
       <input id="link" name="link" type="text" required spellcheck="false"
              value="{{ link_input or 'https://github.com/kshiti26-11/demo' }}"
              placeholder="https://github.com/owner/orders-service/pull/1">
-      <button type="submit" class="btn btn-primary btn-run" id="launch-btn" aria-label="Assign detectives">
-        <span class="spinner" aria-hidden="true"></span><span class="btn-label">Assign detectives</span>
+      <button type="submit" class="btn btn-primary btn-run" id="launch-btn" aria-label="Assign detectives: run the 3 agents">
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="btn-stack"><span class="btn-label">Assign detectives</span><span class="btn-sub">Run 3 agents</span></span>
       </button>
     </div>
     <p class="launcher-error" id="launch-error" role="alert" {% if not launch_error %}hidden{% endif %}>{{ launch_error or '' }}</p>
     <div class="presets">
-      <span class="presets-label">Cold cases:</span>
+      <span class="presets-label">Cold cases <small>(example links):</small></span>
       <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo">kshiti26-11/demo (Orders V2 breaking change)</button>
       <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo/tree/branch1">demo @ branch1</button>
       <button type="button" class="chip" data-link="https://github.com/kshiti26-11/demo/compare/15f95af...branch1">compare 15f95af...branch1</button>
@@ -29,7 +38,10 @@
     <div class="console-bar">
       <div class="console-left">
         <span class="live-dot" id="live-dot" aria-hidden="true"></span>
-        <strong class="console-title">SyncSnitch Multi-Agent Orchestrator</strong>
+        <div class="console-heading">
+          <strong class="console-title">SyncSnitch Multi-Agent Orchestrator</strong>
+          <span class="label">The case in progress · live run</span>
+        </div>
         <span class="phase" id="phase">STARTING</span>
       </div>
       <div class="console-right">
@@ -71,8 +83,11 @@
 
     <div class="agents">
       <article class="agent agent-1" id="agent-tracer" data-status="queued">
-        <header><span class="agent-no">Subagent 1</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
-        <h2>Schema Diff &amp; AST Tracer</h2>
+        <header><span class="agent-no">Subagent 1 · S3</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <div class="agent-title">
+          <h2>Schema Diff &amp; AST Tracer</h2>
+          <span class="label">The Tracer · confirms real impact</span>
+        </div>
         <p class="role">Zero-token diff on REST, gRPC &amp; DB; traces consumer AST reachability.</p>
         <dl class="facts">
           <dt>Breaking Changes</dt><dd data-f="breaking">–</dd>
@@ -86,8 +101,11 @@
       </article>
 
       <article class="agent agent-2" id="agent-transformer" data-status="queued">
-        <header><span class="agent-no">Subagent 2</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
-        <h2>Downstream Code Transformer</h2>
+        <header><span class="agent-no">Subagent 2 · S4</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <div class="agent-title">
+          <h2>Downstream Code Transformer</h2>
+          <span class="label">The Transformer · writes the adapter</span>
+        </div>
         <p class="role">Synthesizes backward-compatible tolerant reader adapters for the consumer.</p>
         <dl class="facts">
           <dt>Pattern</dt><dd>Tolerant Reader Adapter</dd>
@@ -102,8 +120,11 @@
       </article>
 
       <article class="agent agent-3" id="agent-verifier" data-status="queued">
-        <header><span class="agent-no">Subagent 3</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
-        <h2>Contract Verifier</h2>
+        <header><span class="agent-no">Subagent 3 · S5–S6</span><span class="pill pill-idle" data-pill>QUEUED</span></header>
+        <div class="agent-title">
+          <h2>Contract Verifier</h2>
+          <span class="label">The Verifier · forensics lab</span>
+        </div>
         <p class="role">Deterministic judge running the V1–V6 suite in a mock container harness.</p>
         <ul class="checks" id="checks">
           {% for cid, name in [("V1", "Consumer unit tests"), ("V2", "Fixtures schema match"), ("V3", "Dual-run vs Upstream v1"),
@@ -120,7 +141,7 @@
     <div class="terminal">
       <div class="terminal-bar">
         <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>SyncSnitch Live Agent Log Stream</span>
+        <span class="terminal-name">SyncSnitch Live Agent Log Stream<span class="tech">The wiretap · every agent step as it happens</span></span>
         <span class="stream-state" id="stream-state"><i class="blink" aria-hidden="true"></i><span>STREAMING</span></span>
       </div>
       <ol class="terminal-body" id="log" aria-live="polite"></ol>
@@ -128,15 +149,16 @@
 
     <section class="gate" id="gate" hidden>
       <h2 id="gate-title">Warrant awaiting signature</h2>
-      <span class="label">Human approval gate</span>
+      <span class="label">Step S7 · human approval gate</span>
       <p id="gate-desc"></p>
       <p class="gate-note" id="gate-note"></p>
       <div class="gate-actions">
-        <button type="button" class="btn btn-approve" id="approve-btn">✅ Approve &amp; Open Draft PR</button>
-        <button type="button" class="btn btn-reject" id="reject-btn">✖ Reject</button>
-        <a class="btn btn-ghost" id="replay-btn" href="#" aria-disabled="true">🔍 View Run Replay</a>
+        <button type="button" class="btn btn-approve" id="approve-btn">Approve &amp; Open Draft PR</button>
+        <button type="button" class="btn btn-reject" id="reject-btn">Reject</button>
+        <a class="btn btn-ghost" id="replay-btn" href="#" aria-disabled="true">View Run Replay</a>
       </div>
       <p class="celebrate" id="celebrate" hidden></p>
+      <p class="gate-motto">Snitches don't merge. Humans do.</p>
     </section>
 
     <div class="console-footer">
@@ -148,19 +170,38 @@
 </section>
 
 <section class="card pipeline-card">
-  <h2>How a case gets solved</h2>
-  <span class="label">S1–S9 workflow pipeline</span>
+  <div class="sec-head">
+    <h2>How a case gets solved</h2>
+    <span class="label">The S1–S9 workflow pipeline · nine steps when an upstream pull request changes a contract</span>
+  </div>
   <p class="muted">An upstream team changed a contract. SyncSnitch found every downstream break, generated a backward-compatible fix, proved it in containers and opened a draft PR after a human approved.</p>
   <div class="pipeline-grid">
-    <div class="pipeline-step"><div class="step-id">S1</div><div class="step-name">Dust for prints</div><span class="label">Detect</span><span class="tag free">0 COINS</span></div>
-    <div class="pipeline-step"><div class="step-id">S2</div><div class="step-name">Follow the trail</div><span class="label">Trace</span><span class="tag free">0 COINS</span></div>
-    <div class="pipeline-step"><div class="step-id">S3</div><div class="step-name">The Tracer</div><span class="label">Tracer</span><span class="tag ai">SUBAGENT</span></div>
-    <div class="pipeline-step"><div class="step-id">S4</div><div class="step-name">The Transformer</div><span class="label">Transformer</span><span class="tag ai">SUBAGENT</span></div>
-    <div class="pipeline-step"><div class="step-id">S5</div><div class="step-name">The lab</div><span class="label">Verify</span><span class="tag lab">DOCKER</span></div>
-    <div class="pipeline-step"><div class="step-id">S6</div><div class="step-name">The Verifier</div><span class="label">Verifier</span><span class="tag ai">SUBAGENT</span></div>
-    <div class="pipeline-step"><div class="step-id">S7</div><div class="step-name">The warrant</div><span class="label">Gate</span><span class="tag human">HUMAN</span></div>
-    <div class="pipeline-step"><div class="step-id">S8</div><div class="step-name">File the case</div><span class="label">Draft PR</span><span class="tag free">0 COINS</span></div>
-    <div class="pipeline-step"><div class="step-id">S9</div><div class="step-name">Close the file</div><span class="label">Artifact</span><span class="tag free">0 COINS</span></div>
+    {% for sid, name, tech, desc, k, kind in [
+      ("S1", "Dust for prints", "Detect", "Contract drift in OpenAPI, protobuf, Alembic", "det", "Deterministic"),
+      ("S2", "Follow the trail", "Trace", "Static trace to consumer file:line", "det", "Deterministic"),
+      ("S3", "The Tracer", "Tracer subagent", "Confirms the real impact", "ai", "AI subagent"),
+      ("S4", "The Transformer", "Transformer subagent", "Writes the tolerant-reader adapter", "ai", "AI subagent"),
+      ("S5", "The lab", "Verify", "V1–V6 checks in Docker containers", "lab", "Docker lab"),
+      ("S6", "The Verifier", "Verifier subagent", "Reads failures, loops back once", "ai", "AI subagent"),
+      ("S7", "The warrant", "Human approval gate", "A person approves or rejects", "human", "Human"),
+      ("S8", "File the case", "Draft PR", "Opens the companion draft PR", "det", "Deterministic"),
+      ("S9", "Close the file", "Run artifact", "Run record + replay page", "det", "Deterministic"),
+    ] %}
+    <div class="pipeline-step k-{{ k }}">
+      <div class="step-id">{{ sid }}</div>
+      <div class="step-name">{{ name }}</div>
+      <span class="step-tech">{{ tech }}</span>
+      <p class="step-desc">{{ desc }}</p>
+      <span class="kind kind-{{ k }}">{{ kind }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="rule">
+    <h3>The rule<span class="tech">How SyncSnitch decides</span></h3>
+    <div>
+      <p class="rule-lead">AI investigates and writes the fix. Code decides pass or fail. A person signs off.</p>
+      <p class="rule-note">S1, S2, S8 and S9 use zero AI tokens. It only ever edits the downstream repo.</p>
+    </div>
   </div>
 </section>
 

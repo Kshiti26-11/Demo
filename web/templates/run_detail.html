@@ -1,123 +1,131 @@
 {% extends "base.html" %}
 {% block title %}Run {{ run.run_id }} Replay — SyncSnitch{% endblock %}
 {% block content %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-  <h2>Run: {{ run.run_id }}</h2>
-  <div>
-    {% if run.verdict and run.verdict.verdict == 'green' %}
-    <span class="stamp green lg">Cleared</span>
-    {% else %}
-    <span class="stamp red lg">Guilty</span>
-    {% endif %}
+{% set green = run.verdict and run.verdict.verdict == 'green' %}
+<section class="folder">
+  <span class="folder-tab" aria-hidden="true">{{ 'Case closed' if green else 'Case open' }}</span>
+  <div class="card paper case-head">
+    <div class="sec-row">
+      <div class="sec-head">
+        <p class="launcher-kicker">Case file</p>
+        <h1 class="case-title">Run {{ run.run_id }}</h1>
+        <span class="label">Run replay · the recorded S1–S9 artifact of this run</span>
+      </div>
+      {% if green %}
+      <span class="stamp green lg">Cleared · verdict green</span>
+      {% else %}
+      <span class="stamp red lg">Guilty · verdict red</span>
+      {% endif %}
+    </div>
+    <dl class="case-facts">
+      <dt>Upstream PR</dt><dd><a href="{{ run.upstream_pr_url }}" target="_blank" rel="noreferrer">{{ run.upstream_pr_url }}</a></dd>
+      <dt>Companion PR</dt><dd><a href="{{ run.companion_pr_url }}" target="_blank" rel="noreferrer">{{ run.companion_pr_url }}</a></dd>
+      <dt>Target branch</dt><dd>{{ run.branch }}</dd>
+      {% if run.created_at %}<dt>Opened</dt><dd>{{ run.created_at }}</dd>{% endif %}
+      {% if run.bob_session_export %}<dt>Bob sessions export</dt><dd>{{ run.bob_session_export }}</dd>{% endif %}
+    </dl>
   </div>
-</div>
+</section>
 
 <div class="card">
-  <h2>Links & Evidence</h2>
-  <p><strong>Upstream PR:</strong> <a href="{{ run.upstream_pr_url }}" target="_blank" style="color:var(--accent);">{{ run.upstream_pr_url }}</a></p>
-  <p><strong>Companion PR:</strong> <a href="{{ run.companion_pr_url }}" target="_blank" style="color:var(--accent);">{{ run.companion_pr_url }}</a></p>
-  <p><strong>Target Branch:</strong> <code>{{ run.branch }}</code></p>
-  {% if run.bob_session_export %}
-  <p><strong>Bob Sessions Export:</strong> <code>{{ run.bob_session_export }}</code></p>
-  {% endif %}
-</div>
-
-<div class="card">
-  <h2>S1–S9 Execution Pipeline</h2>
+  <div class="sec-head">
+    <h2>How this case was solved</h2>
+    <span class="label">S1–S9 execution pipeline of this run</span>
+  </div>
+  {% set themed = {"S1": "Dust for prints", "S2": "Follow the trail", "S3": "The Tracer", "S4": "The Transformer", "S5": "The lab",
+                   "S6": "The Verifier", "S7": "The warrant", "S8": "File the case", "S9": "Close the file"} %}
+  {% set kinds = {"ai": ("ai", "AI subagent"), "human": ("human", "Human")} %}
   <div class="pipeline-grid">
     {% for s in run.steps %}
-    <div class="pipeline-step">
+    {% set k, kind = ("lab", "Docker lab") if s.id == "S5" else kinds.get(s.type, ("det", "Deterministic")) %}
+    <div class="pipeline-step k-{{ k }}">
       <div class="step-id">{{ s.id }}</div>
-      <div class="step-name">{{ s.name }}</div>
-      <span class="badge badge-{{ s.type }}">{{ s.type }}</span>
+      <div class="step-name">{{ themed.get(s.id, s.name) }}</div>
+      <span class="step-tech">{{ s.name }}</span>
+      <span class="kind kind-{{ k }}">{{ kind }}</span>
     </div>
     {% endfor %}
   </div>
 </div>
 
 {% if run.drift and run.drift.changes %}
-<div class="card">
-  <h2>Suspects</h2>
-  <span class="label">Contract changes</span>
-  <p class="muted">({{ (run.drift.summary or {}).total or (run.drift.changes | length) }} changes)</p>
-  <table>
-    <thead>
-      <tr>
-        <th>Surface</th>
-        <th>Location</th>
-        <th>Kind</th>
-        <th>Old Token</th>
-        <th>Breaking</th>
-        <th>Note</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in run.drift.changes %}
-      <tr class="{% if c.breaking %}breaking{% endif %}">
-        <td><span class="badge badge-deterministic">{{ c.surface }}</span></td>
-        <td><code>{{ c.location }}</code></td>
-        <td>{{ c.kind }}</td>
-        <td><code>{{ c.old or '-' }}</code></td>
-        <td>{% if c.breaking %}<span class="stamp red sm">Guilty</span>{% else %}<span class="stamp green sm">Cleared</span>{% endif %}</td>
-        <td>{{ c.note or '' }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="card paper">
+  <div class="sec-head">
+    <h2>The suspects</h2>
+    <span class="label">Contract changes found by S1 detect ({{ (run.drift.summary or {}).total or (run.drift.changes | length) }} changes)</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Surface</th>
+          <th>Location</th>
+          <th>Kind</th>
+          <th>Old Token</th>
+          <th>Verdict</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in run.drift.changes %}
+        <tr class="{% if c.breaking %}breaking{% endif %}">
+          <td><span class="badge badge-deterministic">{{ c.surface }}</span></td>
+          <td><code>{{ c.location }}</code></td>
+          <td>{{ c.kind }}</td>
+          <td><code>{{ c.old or '-' }}</code></td>
+          <td>{% if c.breaking %}<span class="stamp red sm">Guilty · breaking</span>{% else %}<span class="stamp green sm">Cleared · safe</span>{% endif %}</td>
+          <td>{{ c.note or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endif %}
 
 <div class="card">
-  <h2>Downstream Ripple & Endpoint Impact Map</h2>
+  <div class="sec-head">
+    <h2>The evidence board</h2>
+    <span class="label">Downstream ripple &amp; endpoint impact map · change → consumer file:line → endpoint that breaks</span>
+  </div>
   {% if impact_graph %}
   <div class="mermaid">
 {{ impact_graph }}
   </div>
   {% else %}
-  <p style="color:var(--text-secondary);">No traced consumer usages in this run.</p>
+  <p class="muted">No traced consumer usages in this run.</p>
   {% endif %}
 </div>
 
 {% if run.verification and run.verification.checks %}
 <div class="card">
-  <h2>Forensics lab</h2>
-  <span class="label">Deterministic checks</span>
-  <table>
-    <thead>
-      <tr>
-        <th>Check</th>
-        <th>Name</th>
-        <th>Status</th>
-        <th>Details</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for v in run.verification.checks %}
-      <tr>
-        <td><strong>{{ v.id }}</strong></td>
-        <td>{{ v.name }}</td>
-        <td>
-          {% if v.status in ('pass', 'passed') %}
-          <span style="color:var(--badge-green);">✅ Passed</span>
-          {% elif v.status in ('skip', 'skipped') %}
-          <span style="color:var(--badge-yellow);">⏭️ Skipped</span>
-          {% else %}
-          <span style="color:var(--badge-red);">❌ Failed</span>
-          {% endif %}
-        </td>
-        <td>{{ v.details }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="sec-head">
+    <h2>Forensics lab</h2>
+    <span class="label">V1–V6 deterministic verification · the model never grades itself</span>
+  </div>
+  <div class="exhibits">
+    {% for v in run.verification.checks %}
+    <div class="exhibit">
+      <span class="vid">{{ v.id }}</span>
+      <div><strong>{{ v.name }}</strong><small>{{ v.details }}</small></div>
+      {% if v.status in ('pass', 'passed') %}<span class="stamp green sm">Pass</span>
+      {% elif v.status in ('skip', 'skipped') %}<span class="stamp plain sm">Skipped</span>
+      {% else %}<span class="stamp red sm">Fail</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
 </div>
 {% endif %}
 
 {% if run.diff %}
 <div class="card">
-  <h2>Chain of custody</h2>
-  <span class="label">How IBM Bob ran this case</span>
-  <pre><code>{{ run.diff }}</code></pre>
+  <div class="sec-head">
+    <h2>The fix on file</h2>
+    <span class="label">Consumer patch diff · the tolerant-reader adapter written by the Transformer (S4)</span>
+  </div>
+  <pre class="diff-box diff-full">{% for line in run.diff.splitlines() -%}
+<span class="{% if line.startswith('+++') or line.startswith('---') or line.startswith('diff ') or line.startswith('index ') %}d-file{% elif line.startswith('@@') %}d-hunk{% elif line.startswith('+') %}d-add{% elif line.startswith('-') %}d-del{% endif %}">{{ line }}</span>
+{%- endfor %}</pre>
 </div>
 {% endif %}
 {% endblock %}

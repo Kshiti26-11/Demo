@@ -2,33 +2,45 @@
 {% block title %}Try-It Sandbox — SyncSnitch{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>Contract Drift & Ripple Sandbox</h2>
-  <p style="color:var(--text-secondary); margin-bottom:1.5rem;">Select a prebaked contract drift scenario to run deterministic detection and consumer tracing live in under 1 second.</p>
-  <div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:1.5rem;">
-    <button onclick="runScenario('rest_field_rename')" class="btn btn-secondary" id="btn-rest_field_rename">REST: Field Rename</button>
-    <button onclick="runScenario('rest_enum_rename')" class="btn btn-secondary" id="btn-rest_enum_rename">REST: Enum Rename</button>
-    <button onclick="runScenario('grpc_fields_removed')" class="btn btn-secondary" id="btn-grpc_fields_removed">gRPC: Fields Removed</button>
-    <button onclick="runScenario('db_column_changes')" class="btn btn-secondary" id="btn-db_column_changes">DB: Column Changes</button>
+  <div class="sec-head">
+    <h2>Commit a crime</h2>
+    <span class="label">Try-it sandbox · contract drift &amp; ripple · trigger a breaking change and watch it get caught</span>
+  </div>
+  <p class="muted">Select a prebaked contract drift scenario to run deterministic detection (S1) and consumer tracing (S2) live in under 1 second.</p>
+  <div class="scenarios">
+    {% for key, name, tech in [("rest_field_rename", "REST: Field Rename", "OpenAPI · customer_name renamed"),
+                               ("rest_enum_rename", "REST: Enum Rename", "OpenAPI · PENDING → AWAITING_PAYMENT"),
+                               ("grpc_fields_removed", "gRPC: Fields Removed", "protobuf · fields removed, enum renamed"),
+                               ("db_column_changes", "DB: Column Changes", "Alembic · columns added and renamed")] %}
+    <button type="button" onclick="runScenario('{{ key }}')" class="btn btn-secondary" id="btn-{{ key }}">{{ name }}<span class="tech">{{ tech }}</span></button>
+    {% endfor %}
   </div>
 </div>
 
-<div id="results-area" style="display:none;">
-  <div class="card">
-    <h2 id="changes-header">Detected Contract Changes</h2>
-    <div id="changes-table-container"></div>
+<div id="results-area" class="stack" hidden>
+  <div class="card paper">
+    <div class="sec-head">
+      <h2 id="changes-header">The suspects</h2>
+      <span class="label">Detected contract changes (S1 detect)</span>
+    </div>
+    <div class="table-wrap" id="changes-table-container"></div>
   </div>
 
   <div class="card">
-    <h2 id="hits-header">Downstream Consumer Usages & Impact</h2>
-    <div id="hits-table-container"></div>
+    <div class="sec-head">
+      <h2 id="hits-header">The trail</h2>
+      <span class="label">Downstream consumer usages &amp; impacted endpoints (S2 trace)</span>
+    </div>
+    <div class="table-wrap" id="hits-table-container"></div>
   </div>
 </div>
 
 <script>
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 async function runScenario(name) {
-  document.querySelectorAll('.hero-buttons button, .btn').forEach(b => b.classList.remove('btn-primary'));
+  document.querySelectorAll('.scenarios .btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-secondary'); });
   const btn = document.getElementById('btn-' + name);
-  if (btn) btn.classList.add('btn-primary');
+  if (btn) { btn.classList.remove('btn-secondary'); btn.classList.add('btn-primary'); }
 
   const res = await fetch('/api/try', {
     method: 'POST',
@@ -40,17 +52,17 @@ async function runScenario(name) {
     return;
   }
   const data = await res.json();
-  document.getElementById('results-area').style.display = 'block';
+  document.getElementById('results-area').hidden = false;
 
   // Render changes
-  let cHtml = '<table><thead><tr><th>Surface</th><th>Location</th><th>Kind</th><th>Breaking</th><th>Note</th></tr></thead><tbody>';
+  let cHtml = '<table><thead><tr><th>Surface</th><th>Location</th><th>Kind</th><th>Verdict</th><th>Note</th></tr></thead><tbody>';
   for (const c of data.changes) {
     cHtml += `<tr class="${c.breaking ? 'breaking' : ''}">
-      <td><span class="badge badge-deterministic">${c.surface}</span></td>
-      <td><code>${c.location}</code></td>
-      <td>${c.kind}</td>
-      <td>${c.breaking ? '<span class="badge badge-breaking">BREAKING</span>' : 'Non-breaking'}</td>
-      <td>${c.note || ''}</td>
+      <td><span class="badge badge-deterministic">${esc(c.surface)}</span></td>
+      <td><code>${esc(c.location)}</code></td>
+      <td>${esc(c.kind)}</td>
+      <td>${c.breaking ? '<span class="stamp red sm">Guilty · breaking</span>' : '<span class="stamp green sm">Cleared · safe</span>'}</td>
+      <td>${esc(c.note)}</td>
     </tr>`;
   }
   cHtml += '</tbody></table>';
@@ -60,15 +72,17 @@ async function runScenario(name) {
   let hHtml = '<table><thead><tr><th>Consumer File</th><th>Line</th><th>Token</th><th>Symbol</th><th>Impacted Endpoints</th></tr></thead><tbody>';
   for (const h of data.hits) {
     hHtml += `<tr>
-      <td><code>${h.file}</code></td>
-      <td>${h.line}</td>
-      <td><code>${h.token}</code></td>
-      <td><code>${h.symbol}</code></td>
-      <td>${(h.endpoints || []).map(e => `<strong>${e}</strong>`).join(', ')}</td>
+      <td><code>${esc(h.file)}</code></td>
+      <td>${esc(h.line)}</td>
+      <td><code>${esc(h.token)}</code></td>
+      <td><code>${esc(h.symbol)}</code></td>
+      <td>${(h.endpoints || []).map(e => `<strong>${esc(e)}</strong>`).join(', ')}</td>
     </tr>`;
   }
+  if (!data.hits.length) hHtml += '<tr><td colspan="5" class="muted">No consumer usages of these changes.</td></tr>';
   hHtml += '</tbody></table>';
   document.getElementById('hits-table-container').innerHTML = hHtml;
+  document.getElementById('results-area').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 </script>
 {% endblock %}

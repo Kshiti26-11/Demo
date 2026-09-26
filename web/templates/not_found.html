@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% block title %}404 Not Found — SyncSnitch{% endblock %}
 {% block content %}
-<div class="card" style="text-align:center; padding:3rem;">
-  <h2>404 — Run Not Found</h2>
-  <p style="color:var(--text-secondary); margin:1rem 0;">The requested run could not be found or has not been synced yet.</p>
-  <a href="/runs" class="btn btn-primary">Back to Runs</a>
+<div class="card paper center-card">
+  <span class="stamp red lg">Case not found</span>
+  <div class="sec-head">
+    <h2>404 — Run Not Found</h2>
+    <span class="label">No case file with this run id</span>
+  </div>
+  <p class="muted">The requested run could not be found or has not been synced yet.</p>
+  <a href="/runs" class="btn btn-primary"><span class="btn-stack"><span>Back to case files</span><span class="btn-sub">Runs replay</span></span></a>
 </div>
 {% endblock %}

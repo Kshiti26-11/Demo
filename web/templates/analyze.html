@@ -1,14 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Analyze a repo — SyncSnitch{% endblock %}
 {% block content %}
-<form class="repo-form" action="/analyze" method="get">
-  <label for="repo" class="repo-label">GitHub repo link</label>
-  <div class="repo-row">
-    <input id="repo" name="repo" type="text" required autocomplete="off" spellcheck="false"
-           value="{{ repo_input }}" placeholder="https://github.com/kshiti26-11/demo">
-    <button type="submit" class="btn btn-primary">Analyze ↵</button>
+<div class="card">
+  <div class="sec-head">
+    <h2>Stakeout</h2>
+    <span class="label">Repo analyzer · runs S1 detect and S2 trace on any GitHub repo, then lets you pick upstream, consumer, base and head</span>
   </div>
-</form>
+  <form class="repo-form" action="/analyze" method="get">
+    <label for="repo" class="repo-label">GitHub repo link</label>
+    <div class="repo-row">
+      <input id="repo" name="repo" type="text" required autocomplete="off" spellcheck="false"
+             value="{{ repo_input }}" placeholder="https://github.com/kshiti26-11/demo">
+      <button type="submit" class="btn btn-primary">Analyze ↵</button>
+    </div>
+  </form>
+</div>
 
 {% if error %}
 <div class="error-box" role="alert"><strong>Could not analyze this repo.</strong> {{ error }}</div>
@@ -17,9 +23,12 @@
 {% if result %}
 {% set r = result %}
 <div class="card">
-  <h2>{{ r.repo }}</h2>
+  <div class="sec-head">
+    <h2>{{ r.repo }}</h2>
+    <span class="label">Stakeout report · what S1 and S2 found in this repo</span>
+  </div>
   {% for n in found.notes %}<p class="muted">{{ n }}</p>{% endfor %}
-  <form action="/analyze" method="get" style="margin-top:0.75rem;">
+  <form action="/analyze" method="get" class="stack" style="gap:16px;">
     <input type="hidden" name="repo" value="{{ r.repo }}">
     <input type="hidden" name="run" value="{{ run_id }}">
     <div class="settings-grid">
@@ -56,9 +65,9 @@
         </select>
       </label>
     </div>
-    <p style="margin-top:1rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+    <p class="btn-row">
       <button type="submit" class="btn btn-secondary">Re-run S1–S2</button>
-      <button type="button" class="btn btn-primary" id="launch-live">Assign detectives with these settings</button>
+      <button type="button" class="btn btn-primary" id="launch-live"><span class="btn-stack"><span>Assign detectives with these settings</span><span class="btn-sub">Run the 3 agents on this upstream / consumer</span></span></button>
     </p>
   </form>
   <div class="stat-row">
@@ -70,7 +79,10 @@
 </div>
 
 <div class="card">
-  <h2>Run <code>{{ run_id }}</code> · S1–S9</h2>
+  <div class="sec-head">
+    <h2>Case progress</h2>
+    <span class="label">Run <code>{{ run_id }}</code> · S1–S9 status</span>
+  </div>
   <div class="pipeline-grid" id="tracker">
     {% set steps = [
       ("S1", "Detect", "deterministic", "done", "done here"),
@@ -83,11 +95,15 @@
       ("S8", "Draft PR", "deterministic", "waiting", "IBM Bob"),
       ("S9", "Artifact", "deterministic", "waiting", "IBM Bob"),
     ] %}
+    {% set themed = {"S1": "Dust for prints", "S2": "Follow the trail", "S3": "The Tracer", "S4": "The Transformer", "S5": "The lab",
+                     "S6": "The Verifier", "S7": "The warrant", "S8": "File the case", "S9": "Close the file"} %}
     {% for sid, name, kind, state, who in steps %}
-    <div class="pipeline-step state-{{ state }}" id="step-{{ sid }}">
+    {% set k = "lab" if sid == "S5" else {"ai": "ai", "human": "human"}.get(kind, "det") %}
+    <div class="pipeline-step k-{{ k }} state-{{ state }}" id="step-{{ sid }}" data-k="{{ k }}">
       <div class="step-id">{{ sid }}</div>
-      <div class="step-name">{{ name }}</div>
-      <span class="badge badge-{{ kind }}">{{ "AI agent" if kind == "ai" else kind }}</span>
+      <div class="step-name">{{ themed[sid] }}</div>
+      <span class="step-tech">{{ name }}</span>
+      <span class="kind kind-{{ k }}">{{ {"ai": "AI subagent", "human": "Human", "lab": "Docker lab"}.get(k, "Deterministic") }}</span>
       <span class="step-state">{{ "✅ " if state == "done" else "⏳ " }}{{ who }}</span>
     </div>
     {% endfor %}
@@ -96,44 +112,56 @@
 </div>
 
 <div class="card">
-  <h2>Start the 3 agents in IBM Bob</h2>
+  <div class="sec-head">
+    <h2>Start the 3 agents in IBM Bob</h2>
+    <span class="label">Alternative to the live runner · the same S3–S9 as a task in the IBM Bob IDE</span>
+  </div>
   <p>Open the <code>kshiti26-11/demo</code> workspace in IBM Bob, start a <strong>new task</strong> and paste this. Bob's
     Tracer, Transformer and Verifier run S3–S7 and stop for your approval. After S9 this page turns green by itself.</p>
-  <div class="cmd" style="margin-top:0.75rem;">
+  <div class="cmd">
     <pre id="bob-cmd">{{ bob_command }}</pre>
     <button type="button" class="btn btn-primary" id="copy-btn">Copy</button>
   </div>
 </div>
 
 <div class="card">
-  <h2>S5 · Prove it in containers (GitHub Actions)</h2>
+  <div class="sec-head">
+    <h2>The lab</h2>
+    <span class="label">S5 · prove it in containers (GitHub Actions)</span>
+  </div>
   <p class="muted">Runs the consumer's integration tests against the real upstream v1 and v2 in Docker mock containers
     ({{ home_repo }} · <code>syncsnitch-analyze.yml</code>). Before Bob's fix, v2 is expected to fail.</p>
-  <p style="margin-top:0.75rem;">
+  <p>
     <button type="button" class="btn btn-secondary" id="verify-btn" {% if not actions_enabled %}disabled title="The server has no GITHUB_TOKEN"{% endif %}>Verify consumer <code>{{ r.consumer_ref }}</code> in GitHub Actions</button>
   </p>
-  <div id="actions-status" class="muted" style="margin-top:0.5rem;"></div>
+  <div id="actions-status" class="muted"></div>
   <div id="actions-table" class="table-wrap"></div>
 </div>
 
 <div class="card">
-  <h2>Impact map</h2>
+  <div class="sec-head">
+    <h2>The evidence board</h2>
+    <span class="label">Impact map · contract change → consumer file:line → endpoint that breaks</span>
+  </div>
   {% if impact_graph %}<div class="mermaid">
 {{ impact_graph }}
   </div>{% else %}<p class="muted">No consumer usages of the breaking changes.</p>{% endif %}
 </div>
 
-<div class="card">
-  <h2>S1 · Contract drift ({{ r.base_sha[:7] }} → {{ r.head }})</h2>
+<div class="card paper">
+  <div class="sec-head">
+    <h2>The suspects</h2>
+    <span class="label">S1 · contract drift ({{ r.base_sha[:7] }} → {{ r.head }})</span>
+  </div>
   <div class="table-wrap"><table>
-    <thead><tr><th>Surface</th><th>Kind</th><th>Location</th><th>Old → New</th><th>Breaking</th></tr></thead>
+    <thead><tr><th>Surface</th><th>Kind</th><th>Location</th><th>Old → New</th><th>Verdict</th></tr></thead>
     <tbody>
     {% for c in r.changes if c.kind != "data_update" %}
       <tr class="{% if c.breaking %}breaking{% endif %}">
         <td><span class="badge badge-deterministic">{{ c.surface }}</span></td>
         <td>{{ c.kind }}</td><td><code>{{ c.location }}</code></td>
         <td><code>{{ c.old or "–" }}</code> → <code>{{ c.new or "–" }}</code></td>
-        <td>{% if c.breaking %}<span class="badge badge-breaking">breaking</span>{% endif %}</td>
+        <td>{% if c.breaking %}<span class="stamp red sm">Guilty · breaking</span>{% else %}<span class="stamp green sm">Cleared · safe</span>{% endif %}</td>
       </tr>
     {% else %}
       <tr><td colspan="5" class="muted">No contract changes between these refs.</td></tr>
@@ -143,7 +171,10 @@
 </div>
 
 <div class="card">
-  <h2>S2 · Consumer usages ({{ r.consumer or "repo root" }})</h2>
+  <div class="sec-head">
+    <h2>The trail</h2>
+    <span class="label">S2 · consumer usages ({{ r.consumer or "repo root" }})</span>
+  </div>
   <div class="table-wrap"><table>
     <thead><tr><th>File</th><th>Line</th><th>Token</th><th>Usage</th><th>Endpoints</th></tr></thead>
     <tbody>
@@ -165,7 +196,7 @@
   const setStep = (id, state, text) => {
     const el = document.getElementById('step-' + id);
     if (!el) return;
-    el.className = 'pipeline-step state-' + state;
+    el.className = 'pipeline-step k-' + (el.dataset.k || 'det') + ' state-' + state;
     el.querySelector('.step-state').textContent = text;
   };
 

@@ -1,0 +1,19 @@
+<!-- syncsnitch -->
+### SyncSnitch found contract drift
+
+Found **{{ drift.summary.breaking }}** breaking changes across {{ drift.summary.total }} total detected changes (REST: {{ drift.summary.by_surface.rest }}, gRPC: {{ drift.summary.by_surface.grpc }}, DB: {{ drift.summary.by_surface.db }}).
+
+#### Breaking changes
+| Surface | Kind | Location | Old | New |
+|---|---|---|---|---|
+{% for c in drift.changes if c.breaking -%}
+| `{{ c.surface }}` | `{{ c.kind }}` | `{{ c.location }}` | `{{ c.old or '-' }}` | `{{ c.new or '-' }}` |
+{% endfor %}
+
+{% if candidates and candidates.summary -%}
+#### Affected consumer files and endpoints
+- **Endpoints**: {{ candidates.summary.endpoints | map('regex_replace', '^(.*)$', '`\\1`') | join(', ') if candidates.summary.endpoints else 'None' }}
+- **Files**: {{ candidates.summary.files | map('regex_replace', '^(.*)$', '`\\1`') | join(', ') if candidates.summary.files else 'None' }}
+{% endif %}
+
+Run `/syncsnitch {% if upstream_pr_url %}{{ upstream_pr_url }}{% else %}<PR URL>{% endif %}` in IBM Bob to generate a verified companion PR.

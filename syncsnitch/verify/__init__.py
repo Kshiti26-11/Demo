@@ -1,0 +1,1 @@
+"""SyncSnitch contract verification package."""

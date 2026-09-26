@@ -1,0 +1,349 @@
+{
+  "run_id": "_sample",
+  "created_at": "2026-09-26T10:15:00Z",
+  "upstream_pr_url": "https://github.com/kshiti26-11/orders-service/pull/1",
+  "companion_pr_url": "https://github.com/kshiti26-11/billing-service/pull/1",
+  "branch": "syncsnitch/orders-service-pr1",
+  "drift": {
+    "run_id": "_sample",
+    "upstream": {
+      "repo": "orders-service",
+      "base": "main",
+      "head": "feat/orders-v2",
+      "base_sha": "666688f",
+      "head_sha": "845497a"
+    },
+    "changes": [
+      {
+        "id": "rest:Order.customer_name:property_removed",
+        "surface": "rest",
+        "kind": "property_removed",
+        "location": "Order.customer_name",
+        "old": "customer_name",
+        "new": null,
+        "breaking": true,
+        "note": "Replaced by customer object with customer_id and display_name"
+      },
+      {
+        "id": "rest:Order.total_price:property_removed",
+        "surface": "rest",
+        "kind": "property_removed",
+        "location": "Order.total_price",
+        "old": "total_price",
+        "new": null,
+        "breaking": true,
+        "note": "Replaced by total object with amount_minor and currency"
+      },
+      {
+        "id": "rest:OrderStatus.PENDING:enum_value_removed",
+        "surface": "rest",
+        "kind": "enum_value_removed",
+        "location": "OrderStatus.PENDING",
+        "old": "PENDING",
+        "new": null,
+        "breaking": true,
+        "note": "Renamed to AWAITING_PAYMENT"
+      },
+      {
+        "id": "grpc:orders.OrderSummary.2:field_removed",
+        "surface": "grpc",
+        "kind": "field_removed",
+        "location": "orders.OrderSummary.2",
+        "old": "customer_name",
+        "new": null,
+        "breaking": true,
+        "note": "Field 2 reserved, replaced by Customer customer = 5"
+      },
+      {
+        "id": "grpc:orders.OrderSummary.3:field_removed",
+        "surface": "grpc",
+        "kind": "field_removed",
+        "location": "orders.OrderSummary.3",
+        "old": "total_price",
+        "new": null,
+        "breaking": true,
+        "note": "Field 3 reserved, replaced by Money total = 6"
+      },
+      {
+        "id": "grpc:orders.OrderStatus.1:enum_value_renamed",
+        "surface": "grpc",
+        "kind": "enum_value_renamed",
+        "location": "orders.OrderStatus.1",
+        "old": "ORDER_STATUS_PENDING",
+        "new": "ORDER_STATUS_AWAITING_PAYMENT",
+        "breaking": true,
+        "note": "wire-compatible, source-breaking"
+      },
+      {
+        "id": "db:orders.customer_name:column_renamed",
+        "surface": "db",
+        "kind": "column_renamed",
+        "location": "orders.customer_name",
+        "old": "customer_name",
+        "new": "customer_display_name",
+        "breaking": true,
+        "note": "Renamed in 0002_money_customer_status.py"
+      },
+      {
+        "id": "db:orders.total_price:column_dropped",
+        "surface": "db",
+        "kind": "column_dropped",
+        "location": "orders.total_price",
+        "old": "total_price",
+        "new": null,
+        "breaking": true,
+        "note": "Dropped in favor of total_minor"
+      },
+      {
+        "id": "db:orders.status:value_renamed",
+        "surface": "db",
+        "kind": "value_renamed",
+        "location": "orders.status",
+        "old": "PENDING",
+        "new": "AWAITING_PAYMENT",
+        "breaking": true,
+        "note": "Data migration PENDING -> AWAITING_PAYMENT"
+      }
+    ],
+    "summary": {
+      "total": 9,
+      "breaking": 9,
+      "by_surface": {
+        "rest": 3,
+        "grpc": 3,
+        "db": 3
+      }
+    }
+  },
+  "candidates": {
+    "run_id": "_sample",
+    "consumer": "billing-service",
+    "hits": [
+      {
+        "file": "billing/models/order.py",
+        "line": 6,
+        "token": "customer_name",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed"
+        ],
+        "usage_kind": "model_field",
+        "symbol": "OrderDTO",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/models/order.py",
+        "line": 7,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed"
+        ],
+        "usage_kind": "model_field",
+        "symbol": "OrderDTO",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 5,
+        "token": "PENDING",
+        "change_ids": [
+          "rest:OrderStatus.PENDING:enum_value_removed",
+          "db:orders.status:value_renamed"
+        ],
+        "usage_kind": "literal",
+        "symbol": "NOT_PAYABLE",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/services/payments.py",
+        "line": 7,
+        "token": "total_price",
+        "change_ids": [
+          "grpc:orders.OrderSummary.3:field_removed"
+        ],
+        "usage_kind": "attribute",
+        "symbol": "status_from_summary",
+        "endpoints": [
+          "GET /payments/{order_id}/status"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/reports/revenue.sql",
+        "line": 1,
+        "token": "total_price",
+        "change_ids": [
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "sql_column",
+        "symbol": "revenue_sql",
+        "endpoints": [
+          "GET /reports/revenue"
+        ],
+        "in_tests": false
+      }
+    ],
+    "summary": {
+      "hits": 5,
+      "files": 4,
+      "endpoints": [
+        "POST /invoices/{order_id}",
+        "GET /payments/{order_id}/status",
+        "GET /reports/revenue"
+      ]
+    }
+  },
+  "impact": {
+    "endpoints": [
+      {
+        "endpoint": "POST /invoices/{order_id}",
+        "surface": "REST",
+        "severity": "LOUD",
+        "details": "Missing customer_name and total_price fails Pydantic OrderDTO validation (HTTP 500).",
+        "hidden_bug": "Status PENDING renamed to AWAITING_PAYMENT allows unpaid orders to be invoiced silently."
+      },
+      {
+        "endpoint": "GET /payments/{order_id}/status",
+        "surface": "gRPC",
+        "severity": "SILENT",
+        "details": "Removed total_price decodes as default 0.0 without errors, setting amount_minor to 0."
+      },
+      {
+        "endpoint": "GET /reports/revenue",
+        "surface": "DB",
+        "severity": "LOUD",
+        "details": "Dropped total_price column triggers SQL UndefinedColumn exception."
+      }
+    ],
+    "migration_notes": "Implemented tolerant reader adapter handling both v1 and v2 payloads simultaneously."
+  },
+  "verification": {
+    "run_id": "_sample",
+    "consumer_sha": "a1b2c3d",
+    "upstream": {
+      "base_sha": "666688f",
+      "head_sha": "845497a"
+    },
+    "checks": [
+      {
+        "id": "V1",
+        "name": "Consumer unit tests",
+        "status": "passed",
+        "details": "6/6 pytest tests passed"
+      },
+      {
+        "id": "V2",
+        "name": "V2 OpenAPI fixture validation",
+        "status": "passed",
+        "details": "order_v2_paid.json & order_v2_unpaid.json match schema"
+      },
+      {
+        "id": "V3",
+        "name": "Upstream v1 backward compatibility",
+        "status": "passed",
+        "details": "5/5 integration tests green against v1 container"
+      },
+      {
+        "id": "V4",
+        "name": "Upstream v2 forward compatibility",
+        "status": "passed",
+        "details": "5/5 integration tests green against v2 container"
+      },
+      {
+        "id": "V5",
+        "name": "Prism contract examples",
+        "status": "passed",
+        "details": "Prism mock examples verified in v1 and v2"
+      },
+      {
+        "id": "V6",
+        "name": "Diff scope containment",
+        "status": "passed",
+        "details": "Changes contained strictly within consumer boundary"
+      }
+    ],
+    "summary": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "verdict": "green"
+    }
+  },
+  "verdict": {
+    "verdict": "green",
+    "reasons": [
+      "All 6 deterministic contract verification checks passed successfully.",
+      "Tolerant-reader adapter proven backward compatible with v1 and forward compatible with v2."
+    ]
+  },
+  "diff": "--- a/billing/models/order.py\n+++ b/billing/models/order.py\n@@ -1,9 +1,24 @@\n from datetime import datetime\n-from pydantic import BaseModel\n+from pydantic import BaseModel, Field\n\n-class OrderDTO(BaseModel):\n+class OrderView(BaseModel):\n     order_id: str\n     customer_name: str\n     total_price: float\n     status: str\n     created_at: datetime\n+\n+    @classmethod\n+    def from_payload(cls, data: dict) -> \"OrderView\":\n+        cid = data[\"order_id\"]\n+        cname = data.get(\"customer_name\") or data.get(\"customer\", {}).get(\"display_name\", \"\")\n+        if \"total\" in data:\n+            price = data[\"total\"][\"amount_minor\"] / 100.0\n+        else:\n+            price = float(data.get(\"total_price\", 0.0))\n+        status = \"PENDING\" if data.get(\"status\") == \"AWAITING_PAYMENT\" else data.get(\"status\", \"\")\n+        return cls(order_id=cid, customer_name=cname, total_price=price, status=status, created_at=data[\"created_at\"])\n",
+  "diffstat": {
+    "insertions": 18,
+    "deletions": 3
+  },
+  "steps": [
+    {
+      "id": "S1",
+      "name": "Detect Drift",
+      "type": "deterministic",
+      "status": "done"
+    },
+    {
+      "id": "S2",
+      "name": "Trace Usages",
+      "type": "deterministic",
+      "status": "done"
+    },
+    {
+      "id": "S3",
+      "name": "Tracer Analysis",
+      "type": "ai",
+      "status": "done"
+    },
+    {
+      "id": "S4",
+      "name": "Transformer Code Generation",
+      "type": "ai",
+      "status": "done"
+    },
+    {
+      "id": "S5",
+      "name": "Mock Container Verification",
+      "type": "deterministic",
+      "status": "done"
+    },
+    {
+      "id": "S6",
+      "name": "Verifier Verdict",
+      "type": "ai",
+      "status": "done"
+    },
+    {
+      "id": "S7",
+      "name": "Human Approval Gate",
+      "type": "human",
+      "status": "done"
+    },
+    {
+      "id": "S8",
+      "name": "Companion Draft PR",
+      "type": "deterministic",
+      "status": "done"
+    },
+    {
+      "id": "S9",
+      "name": "Publish Artifact",
+      "type": "deterministic",
+      "status": "done"
+    }
+  ],
+  "bob_session_export": "bob_sessions/exports/P3-3-hero-run.md"
+}

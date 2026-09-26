@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Try-It Sandbox — SyncSnitch{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Contract Drift & Ripple Sandbox</h2>
+  <p style="color:var(--text-secondary); margin-bottom:1.5rem;">Select a prebaked contract drift scenario to run deterministic detection and consumer tracing live in under 1 second.</p>
+  <div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:1.5rem;">
+    <button onclick="runScenario('rest_field_rename')" class="btn btn-secondary" id="btn-rest_field_rename">REST: Field Rename</button>
+    <button onclick="runScenario('rest_enum_rename')" class="btn btn-secondary" id="btn-rest_enum_rename">REST: Enum Rename</button>
+    <button onclick="runScenario('grpc_fields_removed')" class="btn btn-secondary" id="btn-grpc_fields_removed">gRPC: Fields Removed</button>
+    <button onclick="runScenario('db_column_changes')" class="btn btn-secondary" id="btn-db_column_changes">DB: Column Changes</button>
+  </div>
+</div>
+
+<div id="results-area" style="display:none;">
+  <div class="card">
+    <h2 id="changes-header">Detected Contract Changes</h2>
+    <div id="changes-table-container"></div>
+  </div>
+
+  <div class="card">
+    <h2 id="hits-header">Downstream Consumer Usages & Impact</h2>
+    <div id="hits-table-container"></div>
+  </div>
+</div>
+
+<script>
+async function runScenario(name) {
+  document.querySelectorAll('.hero-buttons button, .btn').forEach(b => b.classList.remove('btn-primary'));
+  const btn = document.getElementById('btn-' + name);
+  if (btn) btn.classList.add('btn-primary');
+
+  const res = await fetch('/api/try', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario: name })
+  });
+  if (!res.ok) {
+    alert('Error running scenario: ' + res.statusText);
+    return;
+  }
+  const data = await res.json();
+  document.getElementById('results-area').style.display = 'block';
+
+  // Render changes
+  let cHtml = '<table><thead><tr><th>Surface</th><th>Location</th><th>Kind</th><th>Breaking</th><th>Note</th></tr></thead><tbody>';
+  for (const c of data.changes) {
+    cHtml += `<tr class="${c.breaking ? 'breaking' : ''}">
+      <td><span class="badge badge-deterministic">${c.surface}</span></td>
+      <td><code>${c.location}</code></td>
+      <td>${c.kind}</td>
+      <td>${c.breaking ? '<span class="badge badge-breaking">BREAKING</span>' : 'Non-breaking'}</td>
+      <td>${c.note || ''}</td>
+    </tr>`;
+  }
+  cHtml += '</tbody></table>';
+  document.getElementById('changes-table-container').innerHTML = cHtml;
+
+  // Render hits
+  let hHtml = '<table><thead><tr><th>Consumer File</th><th>Line</th><th>Token</th><th>Symbol</th><th>Impacted Endpoints</th></tr></thead><tbody>';
+  for (const h of data.hits) {
+    hHtml += `<tr>
+      <td><code>${h.file}</code></td>
+      <td>${h.line}</td>
+      <td><code>${h.token}</code></td>
+      <td><code>${h.symbol}</code></td>
+      <td>${(h.endpoints || []).map(e => `<strong>${e}</strong>`).join(', ')}</td>
+    </tr>`;
+  }
+  hHtml += '</tbody></table>';
+  document.getElementById('hits-table-container').innerHTML = hHtml;
+}
+</script>
+{% endblock %}

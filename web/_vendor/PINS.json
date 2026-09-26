@@ -1,0 +1,7 @@
+{
+  "orders_v1": {"ref": "main", "sha": "666688fbf1da68ceece7845670f5fbaa165e6dd3"},
+  "orders_v2": {"ref": "feat/orders-v2", "sha": "845497a1e608280b57c58b7206c87c55d63069a7"},
+  "billing_before": {"ref": "main", "sha": "0e293490285f5f96c2e2f46724d8a96493f51a1e"},
+  "billing_after": {"ref": "main", "sha": "0e293490285f5f96c2e2f46724d8a96493f51a1e"},
+  "syncsnitch_engine": {"ref": "HEAD", "sha": "57f7361ada625eed549cc097ca7d1d629ec87355"}
+}

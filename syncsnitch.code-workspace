@@ -1,0 +1,13 @@
+{
+  "folders": [
+    { "name": "syncsnitch (main repo)", "path": "." },
+    { "name": "orders-service (upstream)", "path": "../orders-service" },
+    { "name": "billing-service (downstream)", "path": "../billing-service" }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.pytest_cache": true
+    }
+  }
+}

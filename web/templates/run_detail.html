@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.run_id }} Replay — SyncSnitch{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+  <h2>Run: {{ run.run_id }}</h2>
+  <div>
+    {% if run.verdict and run.verdict.verdict == 'green' %}
+    <span class="badge badge-human" style="font-size:1rem; padding:0.4rem 1rem;">VERDICT: GREEN</span>
+    {% else %}
+    <span class="badge badge-breaking" style="font-size:1rem; padding:0.4rem 1rem;">VERDICT: RED</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Links & Evidence</h2>
+  <p><strong>Upstream PR:</strong> <a href="{{ run.upstream_pr_url }}" target="_blank" style="color:var(--accent);">{{ run.upstream_pr_url }}</a></p>
+  <p><strong>Companion PR:</strong> <a href="{{ run.companion_pr_url }}" target="_blank" style="color:var(--accent);">{{ run.companion_pr_url }}</a></p>
+  <p><strong>Target Branch:</strong> <code>{{ run.branch }}</code></p>
+  {% if run.bob_session_export %}
+  <p><strong>Bob Sessions Export:</strong> <code>{{ run.bob_session_export }}</code></p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>S1–S9 Execution Pipeline</h2>
+  <div class="pipeline-grid">
+    {% for s in run.steps %}
+    <div class="pipeline-step">
+      <div class="step-id">{{ s.id }}</div>
+      <div class="step-name">{{ s.name }}</div>
+      <span class="badge badge-{{ s.type }}">{{ s.type }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% if run.drift and run.drift.changes %}
+<div class="card">
+  <h2>Contract Drift by Surface ({{ run.drift.summary.total }} changes)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Surface</th>
+        <th>Location</th>
+        <th>Kind</th>
+        <th>Old Token</th>
+        <th>Breaking</th>
+        <th>Note</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in run.drift.changes %}
+      <tr class="{% if c.breaking %}breaking{% endif %}">
+        <td><span class="badge badge-deterministic">{{ c.surface }}</span></td>
+        <td><code>{{ c.location }}</code></td>
+        <td>{{ c.kind }}</td>
+        <td><code>{{ c.old or '-' }}</code></td>
+        <td>{% if c.breaking %}<span class="badge badge-breaking">BREAKING</span>{% else %}Non-breaking{% endif %}</td>
+        <td>{{ c.note or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Downstream Ripple & Endpoint Impact Map</h2>
+  <div class="mermaid">
+graph LR
+  subgraph Upstream Drift
+    D1["REST: customer_name & total_price"]
+    D2["gRPC: fields 2 & 3 removed"]
+    D3["DB: column total_price dropped"]
+    D4["Enum: PENDING -> AWAITING_PAYMENT"]
+  end
+  subgraph Consumer Files
+    F1["billing/models/order.py"]
+    F2["billing/services/payments.py"]
+    F3["billing/reports/revenue.sql"]
+    F4["billing/services/invoice.py"]
+  end
+  subgraph Impacted Endpoints
+    E1["POST /invoices/{order_id} (LOUD)"]
+    E2["GET /payments/{order_id}/status (SILENT)"]
+    E3["GET /reports/revenue (LOUD)"]
+    E4["Silent Bug: Unpaid order invoiced"]
+  end
+
+  D1 --> F1 --> E1
+  D2 --> F2 --> E2
+  D3 --> F3 --> E3
+  D4 --> F4 --> E4
+  </div>
+</div>
+
+{% if run.verification and run.verification.checks %}
+<div class="card">
+  <h2>V1–V6 Deterministic Verification Results</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Check</th>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in run.verification.checks %}
+      <tr>
+        <td><strong>{{ v.id }}</strong></td>
+        <td>{{ v.name }}</td>
+        <td>
+          {% if v.status == 'passed' %}
+          <span style="color:var(--badge-green);">✅ Passed</span>
+          {% elif v.status == 'skipped' %}
+          <span style="color:var(--badge-yellow);">⏭️ Skipped</span>
+          {% else %}
+          <span style="color:var(--badge-red);">❌ Failed</span>
+          {% endif %}
+        </td>
+        <td>{{ v.details }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if run.diff %}
+<div class="card">
+  <h2>Consumer Patch Diff</h2>
+  <pre><code>{{ run.diff }}</code></pre>
+</div>
+{% endif %}
+{% endblock %}

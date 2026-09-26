@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}SyncSnitch — Contract Drift Autonomous Agent{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Autonomous, Human-Gated Contract Drift</h1>
+  <p>An upstream team changed a contract. SyncSnitch found every downstream break, generated a backward-compatible fix, proved it in containers and opened a draft PR after a human approved.</p>
+  <div class="hero-buttons">
+    <a href="/runs" class="btn btn-primary">Runs Replay</a>
+    <a href="/matrix" class="btn btn-secondary">Live Matrix</a>
+    <a href="/try" class="btn btn-secondary">Try it Sandbox</a>
+  </div>
+</section>
+
+<div class="card">
+  <h2>The S1–S9 Workflow Pipeline</h2>
+  <div class="pipeline-grid">
+    <div class="pipeline-step"><div class="step-id">S1</div><div class="step-name">Detect</div><span class="badge badge-deterministic">0 COINS</span></div>
+    <div class="pipeline-step"><div class="step-id">S2</div><div class="step-name">Trace</div><span class="badge badge-deterministic">0 COINS</span></div>
+    <div class="pipeline-step"><div class="step-id">S3</div><div class="step-name">Tracer</div><span class="badge badge-ai">SUBAGENT</span></div>
+    <div class="pipeline-step"><div class="step-id">S4</div><div class="step-name">Transformer</div><span class="badge badge-ai">SUBAGENT</span></div>
+    <div class="pipeline-step"><div class="step-id">S5</div><div class="step-name">Verify</div><span class="badge badge-deterministic">DOCKER</span></div>
+    <div class="pipeline-step"><div class="step-id">S6</div><div class="step-name">Verifier</div><span class="badge badge-ai">SUBAGENT</span></div>
+    <div class="pipeline-step"><div class="step-id">S7</div><div class="step-name">Gate</div><span class="badge badge-human">HUMAN</span></div>
+    <div class="pipeline-step"><div class="step-id">S8</div><div class="step-name">Draft PR</div><span class="badge badge-deterministic">0 COINS</span></div>
+    <div class="pipeline-step"><div class="step-id">S9</div><div class="step-name">Artifact</div><span class="badge badge-deterministic">0 COINS</span></div>
+  </div>
+</div>
+{% endblock %}

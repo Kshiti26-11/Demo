@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Live Contract Matrix — SyncSnitch{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Live REST Contract Matrix</h2>
+  <p style="color:var(--text-secondary); margin-bottom:1.5rem;">live REST calls, in-process</p>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>Consumer State</th>
+        <th>Upstream v1 Contract</th>
+        <th>Upstream v2 Contract</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>billing (before fix)</strong></td>
+        <td>
+          {% if matrix.before.v1.verdict == 'ok' %}
+          <div style="background:rgba(34,197,94,0.15); border:1px solid var(--badge-green); border-radius:8px; padding:0.75rem;">
+            <strong style="color:var(--badge-green);">OK (201 / 409)</strong>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.25rem;">{{ matrix.before.v1.body }}</p>
+          </div>
+          {% else %}
+          <div style="background:rgba(239,68,68,0.15); border:1px solid var(--badge-red); border-radius:8px; padding:0.75rem;">
+            <strong style="color:var(--badge-red);">BROKEN</strong>
+          </div>
+          {% endif %}
+        </td>
+        <td>
+          {% if matrix.before.v2.verdict == 'ok' %}
+          <div style="background:rgba(34,197,94,0.15); border:1px solid var(--badge-green); border-radius:8px; padding:0.75rem;">
+            <strong style="color:var(--badge-green);">OK</strong>
+          </div>
+          {% else %}
+          <div style="background:rgba(239,68,68,0.15); border:1px solid var(--badge-red); border-radius:8px; padding:0.75rem;">
+            <strong style="color:var(--badge-red);">BROKEN (HTTP 500)</strong>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.25rem;">{{ matrix.before.v2.body }}</p>
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td><strong>billing (after fix)</strong></td>
+        <td>
+          {% if matrix.after.v1.verdict == 'ok' %}
+          <div style="background:rgba(34,197,94,0.15); border:1px solid var(--badge-green); border-radius:8px; padding:0.75rem;">
+            <strong style="color:var(--badge-green);">OK (201 / 409)</strong>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.25rem;">{{ matrix.after.v1.body }}</p>
+          </div>
+          {% else %}
+          <div style="background:rgba(239,68,68,0.15); border:1px solid var(--badge-red); border-radius:8px; padding:0.75rem;">
+            <strong style="color:var(--badge-red);">BROKEN</strong>
+          </div>
+          {% endif %}
+        </td>
+        <td>
+          {% if matrix.after.v2.verdict == 'ok' %}
+          <div style="background:rgba(34,197,94,0.15); border:1px solid var(--badge-green); border-radius:8px; padding:0.75rem;">
+            <strong style="color:var(--badge-green);">OK (201 / 409)</strong>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.25rem;">{{ matrix.after.v2.body }}</p>
+          </div>
+          {% else %}
+          <div style="background:rgba(239,68,68,0.15); border:1px solid var(--badge-red); border-radius:8px; padding:0.75rem;">
+            <strong style="color:var(--badge-red);">BROKEN (Pending H-2 companion branch re-vendor)</strong>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.25rem;">{{ matrix.after.v2.body }}</p>
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>gRPC and DB (from the latest recorded container run)</h2>
+  {% if matrix.container_runs and matrix.container_runs.run_id %}
+  <p style="color:var(--text-secondary); margin-bottom:1rem;">Source run: <strong>{{ matrix.container_runs.run_id }}</strong></p>
+  <table>
+    <thead>
+      <tr>
+        <th>Surface / Check</th>
+        <th>Status</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if matrix.container_runs.v3 %}
+      <tr>
+        <td><strong>V3: Backward Compatibility (v1)</strong></td>
+        <td><span style="color:var(--badge-green);">✅ Passed</span></td>
+        <td>{{ matrix.container_runs.v3.details }}</td>
+      </tr>
+      {% endif %}
+      {% if matrix.container_runs.v4 %}
+      <tr>
+        <td><strong>V4: Forward Compatibility (v2)</strong></td>
+        <td><span style="color:var(--badge-green);">✅ Passed</span></td>
+        <td>{{ matrix.container_runs.v4.details }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--text-secondary);">No recorded container runs found.</p>
+  {% endif %}
+</div>
+{% endblock %}

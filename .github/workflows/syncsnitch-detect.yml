@@ -1,0 +1,50 @@
+name: syncsnitch-detect
+on:
+  workflow_call:
+    inputs:
+      consumer_repo:
+        description: owner/name of the downstream consumer repository
+        required: true
+        type: string
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the upstream PR
+        uses: actions/checkout@v4
+        with:
+          path: upstream
+          fetch-depth: 0
+      - name: Check out SyncSnitch
+        uses: actions/checkout@v4
+        with:
+          repository: kshiti26-11/demo
+          ref: main
+          path: syncsnitch
+      - name: Check out the consumer
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.consumer_repo }}
+          path: consumer
+      - uses: astral-sh/setup-uv@v6
+      - name: Install SyncSnitch
+        working-directory: syncsnitch
+        run: uv sync --frozen
+      - name: Detect and trace (deterministic, 0 Bobcoins)
+        working-directory: syncsnitch
+        env:
+          RUN_ID: ci-${{ github.run_id }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          uv run syncsnitch detect --upstream ../upstream --base "origin/$BASE_REF" --head HEAD --run-id "$RUN_ID"
+          uv run syncsnitch trace --run-id "$RUN_ID" --consumer ../consumer
+          uv run syncsnitch report --run-id "$RUN_ID" --format comment > ../comment.md
+      - name: Post or update the SyncSnitch comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file comment.md --edit-last \
+            || gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file comment.md

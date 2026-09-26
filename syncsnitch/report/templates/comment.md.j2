@@ -1,0 +1,36 @@
+<!-- syncsnitch -->
+### SyncSnitch found contract drift
+
+Run ID: `{{ run_id }}`
+{% if upstream_pr_url %}Upstream PR: {{ upstream_pr_url }}{% endif %}
+
+**{{ summary.breaking }} breaking change(s)** across {{ summary.total }} total changes.
+
+| Surface | Breaking |
+|---------|---------|
+| REST | {{ breaking_by_surface.rest }} |
+| gRPC | {{ breaking_by_surface.grpc }} |
+| DB | {{ breaking_by_surface.db }} |
+
+{% if breaking_changes %}
+#### Breaking changes
+
+| Kind | Location | Old → New |
+|------|----------|-----------|
+{% for c in breaking_changes %}| {{ c.kind }} | `{{ c.location }}` | `{{ c.old }}` → `{{ c.new }}` |
+{% endfor %}
+{% endif %}
+
+{% if candidates %}
+#### Affected consumer files
+
+Files: {{ candidates.summary.files }} · Hits: {{ candidates.summary.hits }}
+
+{% if candidates.summary.endpoints %}
+Affected endpoints: {{ candidates.summary.endpoints | join(', ') }}
+{% endif %}
+{% endif %}
+
+---
+
+Run `/syncsnitch {{ upstream_pr_url or "<PR URL>" }}` in IBM Bob to generate a verified companion PR.

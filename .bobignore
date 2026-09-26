@@ -1,0 +1,11 @@
+# Keep IBM Bob out of bulky or generated files (saves Bobcoins).
+# NOTE: .syncsnitch/ is deliberately NOT ignored - Bob must read its run artifacts.
+.venv/
+**/__pycache__/
+.pytest_cache/
+uv.lock
+web/_vendor/
+**/gen/
+**/*.binpb
+bob_sessions/screenshots/
+bob_sessions/raw/

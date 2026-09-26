@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}SyncSnitch Runs{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Contract Drift Verification Runs</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Run ID</th>
+        <th>Created</th>
+        <th>Upstream PR</th>
+        <th>Companion PR</th>
+        <th>Verdict</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td>
+          <strong>{{ r.run_id }}</strong>
+          {% if r.is_sample %}<span class="badge badge-human">Sample</span>{% endif %}
+        </td>
+        <td>{{ r.created_at or 'N/A' }}</td>
+        <td><a href="{{ r.upstream_pr_url }}" target="_blank" style="color:var(--accent);">Upstream PR</a></td>
+        <td><a href="{{ r.companion_pr_url }}" target="_blank" style="color:var(--accent);">Companion PR</a></td>
+        <td>
+          {% if r.verdict and r.verdict.verdict == 'green' %}
+          <span class="badge badge-human">GREEN</span>
+          {% else %}
+          <span class="badge badge-breaking">RED</span>
+          {% endif %}
+        </td>
+        <td><a href="/runs/{{ r.run_id }}" class="btn btn-secondary" style="padding:0.3rem 0.8rem; font-size:0.85rem;">View Replay</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,7 +1,7 @@
 {
   "order_id": "o-1002",
   "customer_name": "Alan Turing",
-  "customer": {"display_name": "Alan Turing", "id": "c-2"},
+  "customer": {"customer_id": "c-0002", "display_name": "Alan Turing"},
   "total_price": 5.0,
   "total": {"amount_minor": 500, "currency": "USD"},
   "status": "AWAITING_PAYMENT",

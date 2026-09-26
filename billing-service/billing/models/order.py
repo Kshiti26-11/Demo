@@ -7,7 +7,8 @@ from pydantic import BaseModel, model_validator
 class CustomerV2(BaseModel):
     """v2 nested customer object (Orders API v2)."""
     display_name: str
-    id: Optional[str] = None
+    customer_id: Optional[str] = None  # v2 schema field name (was 'id' in draft)
+    id: Optional[str] = None           # tolerate 'id' from older stubs/fixtures
 
 
 class MoneyV2(BaseModel):

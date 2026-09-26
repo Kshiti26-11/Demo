@@ -1,7 +1,7 @@
 {
   "order_id": "o-1001",
   "customer_name": "Ada Lovelace",
-  "customer": {"display_name": "Ada Lovelace", "id": "c-1"},
+  "customer": {"customer_id": "c-0001", "display_name": "Ada Lovelace"},
   "total_price": 19.99,
   "total": {"amount_minor": 1999, "currency": "USD"},
   "status": "PAID",

@@ -30,7 +30,7 @@ def run_detect(upstream: str | Path, base: str, head: str, run_id: str, runs_dir
     is missing at either ref) and the migrations/versions/*.py files ADDED between base and head.
     Writes <runs_dir>/<run_id>/drift.json and returns it.
     """
-    upstream = Path(upstream).resolve()
+    upstream = Path(upstream["repo"] if isinstance(upstream, dict) else upstream).resolve()
     base_sha = resolve_ref(upstream, base)
     head_sha = resolve_ref(upstream, head)
 
@@ -46,9 +46,11 @@ def run_detect(upstream: str | Path, base: str, head: str, run_id: str, runs_dir
     if old_proto is not None and new_proto is not None:
         changes += diff_proto_texts(old_proto, new_proto)
 
+    added = added_files(upstream, base_sha, head_sha, ".")
     migration_files = [
         (path, show_file(upstream, head_sha, path) or "")
-        for path in added_files(upstream, base_sha, head_sha, MIGRATIONS_GLOB)
+        for path in added
+        if "migration" in path and path.endswith(".py")
     ]
     changes += diff_migrations(migration_files)
 

@@ -48,9 +48,7 @@ def list_runs() -> list[dict]:
             continue
 
     real_runs.sort(key=lambda r: r.get("created_at") or "", reverse=True)
-    if real_runs:
-        return real_runs
-    return sample_runs
+    return real_runs + sample_runs
 
 @app.get("/health")
 def health():

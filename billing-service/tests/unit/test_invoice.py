@@ -14,6 +14,8 @@ def _load(name: str) -> dict:
 
 PAID = _load("order_paid.json")
 UNPAID = _load("order_unpaid.json")
+V2_PAID = _load("order_v2_paid.json")
+V2_UNPAID = _load("order_v2_unpaid.json")
 
 EXPECTED = {
     "order_id": "o-1001",
@@ -25,14 +27,17 @@ EXPECTED = {
 }
 
 
-def test_paid_fixture_invoice():
-    assert invoice_from_order_payload(PAID) == EXPECTED
+@pytest.mark.parametrize("payload", [PAID, V2_PAID])
+def test_paid_fixture_invoice(payload):
+    assert invoice_from_order_payload(payload) == EXPECTED
 
 
-def test_unpaid_fixture_returns_none():
-    assert invoice_from_order_payload(UNPAID) is None
-
-
-def test_cancelled_returns_none():
-    payload = dict(PAID, status="CANCELLED")
+@pytest.mark.parametrize("payload", [UNPAID, V2_UNPAID])
+def test_unpaid_fixture_returns_none(payload):
     assert invoice_from_order_payload(payload) is None
+
+
+@pytest.mark.parametrize("payload", [PAID, V2_PAID])
+def test_cancelled_returns_none(payload):
+    p = dict(payload, status="CANCELLED")
+    assert invoice_from_order_payload(p) is None

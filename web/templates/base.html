@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}SyncSnitch Demo{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Franklin:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
@@ -15,17 +18,17 @@
     <div class="site-header-inner">
       <div class="brand-block">
         <div class="brand-row">
-          <a href="/" class="brand" aria-label="SyncSnitch home">🕵️ <span class="brand-text">SyncSnitch</span></a>
-          <span class="hbadge hbadge-live" title="This site is serving from {{ request.url.netloc }}"><i class="dot"></i>{{ live_badge(request) }}</span>
+          <a href="/" class="brand" aria-label="SyncSnitch home"><span class="brand-text">SyncSnitch</span></a>
+          <span class="label label-live" id="live-pill" title="This site is serving from {{ request.url.netloc }}"><i class="dot"></i>{{ live_badge(request) }}</span>
           <span class="hbadge hbadge-bob">IBM Bob 2.0</span>
         </div>
         <p class="brand-sub">Autonomous, human-gated contract-drift agent for distributed systems.</p>
       </div>
       <nav class="site-nav" aria-label="Main">
-        <a href="/runs">Runs Replay</a>
-        <a href="/matrix">Live Matrix</a>
-        <a href="/try">Try-It Sandbox</a>
-        <a href="/analyze">Repo Analyzer</a>
+        <a href="/runs">Case files</a>
+        <a href="/matrix">The lineup</a>
+        <a href="/try">Commit a crime</a>
+        <a href="/analyze">Stakeout</a>
         <a href="https://github.com/kshiti26-11/demo" target="_blank" rel="noreferrer">GitHub ↗</a>
       </nav>
     </div>
@@ -34,7 +37,7 @@
     {% block content %}{% endblock %}
   </main>
   <footer>
-    <p>Built with IBM Bob · evidence in <a href="https://github.com/kshiti26-11/demo/tree/main/bob_sessions" target="_blank" rel="noreferrer" style="color:var(--accent);">bob_sessions/</a></p>
+    <p>Catch it. Prove it. Sign it. · Built with IBM Bob · evidence in <a href="https://github.com/kshiti26-11/demo/tree/main/bob_sessions" target="_blank" rel="noreferrer" style="color:var(--accent);">bob_sessions/</a></p>
   </footer>
 </body>
 </html>

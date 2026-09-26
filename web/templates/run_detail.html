@@ -5,9 +5,9 @@
   <h2>Run: {{ run.run_id }}</h2>
   <div>
     {% if run.verdict and run.verdict.verdict == 'green' %}
-    <span class="badge badge-human" style="font-size:1rem; padding:0.4rem 1rem;">VERDICT: GREEN</span>
+    <span class="stamp green lg">Cleared</span>
     {% else %}
-    <span class="badge badge-breaking" style="font-size:1rem; padding:0.4rem 1rem;">VERDICT: RED</span>
+    <span class="stamp red lg">Guilty</span>
     {% endif %}
   </div>
 </div>
@@ -37,7 +37,9 @@
 
 {% if run.drift and run.drift.changes %}
 <div class="card">
-  <h2>Contract Drift by Surface ({{ (run.drift.summary or {}).total or (run.drift.changes | length) }} changes)</h2>
+  <h2>Suspects</h2>
+  <span class="label">Contract changes</span>
+  <p class="muted">({{ (run.drift.summary or {}).total or (run.drift.changes | length) }} changes)</p>
   <table>
     <thead>
       <tr>
@@ -56,7 +58,7 @@
         <td><code>{{ c.location }}</code></td>
         <td>{{ c.kind }}</td>
         <td><code>{{ c.old or '-' }}</code></td>
-        <td>{% if c.breaking %}<span class="badge badge-breaking">BREAKING</span>{% else %}Non-breaking{% endif %}</td>
+        <td>{% if c.breaking %}<span class="stamp red sm">Guilty</span>{% else %}<span class="stamp green sm">Cleared</span>{% endif %}</td>
         <td>{{ c.note or '' }}</td>
       </tr>
       {% endfor %}
@@ -78,7 +80,8 @@
 
 {% if run.verification and run.verification.checks %}
 <div class="card">
-  <h2>V1–V6 Deterministic Verification Results</h2>
+  <h2>Forensics lab</h2>
+  <span class="label">Deterministic checks</span>
   <table>
     <thead>
       <tr>
@@ -112,7 +115,8 @@
 
 {% if run.diff %}
 <div class="card">
-  <h2>Consumer Patch Diff</h2>
+  <h2>Chain of custody</h2>
+  <span class="label">How IBM Bob ran this case</span>
   <pre><code>{{ run.diff }}</code></pre>
 </div>
 {% endif %}

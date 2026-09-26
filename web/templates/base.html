@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}SyncSnitch Demo{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+  </script>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="brand">🕵️ SyncSnitch</a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/runs">Runs</a></li>
+        <li><a href="/matrix">Matrix</a></li>
+        <li><a href="/try">Try it</a></li>
+        <li><a href="https://github.com/kshiti26-11/demo" target="_blank" rel="noreferrer">GitHub</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    <p>Built with IBM Bob · evidence in <a href="https://github.com/kshiti26-11/demo/tree/main/bob_sessions" target="_blank" style="color:var(--accent);">bob_sessions/</a></p>
+  </footer>
+</body>
+</html>

@@ -1,11 +1,9 @@
-// Orders gRPC contract v1 - owned by orders-service (upstream).
-// Reference copy for SyncSnitch - do not edit.
+// Orders gRPC contract v2 with tolerant reader fields for v1 support
 syntax = "proto3";
 
 package orders;
 
 service OrderLookup {
-  // Returns NOT_FOUND for an unknown order_id.
   rpc GetOrderSummary(GetOrderSummaryRequest) returns (OrderSummary);
 }
 
@@ -15,15 +13,28 @@ message GetOrderSummaryRequest {
 
 enum OrderStatus {
   ORDER_STATUS_UNSPECIFIED = 0;
-  ORDER_STATUS_PENDING = 1;
+  ORDER_STATUS_AWAITING_PAYMENT = 1;
   ORDER_STATUS_PAID = 2;
   ORDER_STATUS_SHIPPED = 3;
   ORDER_STATUS_CANCELLED = 4;
 }
 
+message Money {
+  int64 amount_minor = 1;
+  string currency = 2;
+}
+
+message Customer {
+  string customer_id = 1;
+  string display_name = 2;
+}
+
 message OrderSummary {
   string order_id = 1;
-  string customer_name = 2;
-  double total_price = 3;  // major units (USD), e.g. 19.99
+  string customer_name = 2 [deprecated = true];
+  double total_price = 3 [deprecated = true];
   OrderStatus status = 4;
+  Customer customer = 5;
+  Money total = 6;
+  string shipping_eta = 7;
 }

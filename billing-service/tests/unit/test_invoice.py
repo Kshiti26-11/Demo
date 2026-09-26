@@ -12,27 +12,30 @@ def _load(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
 
 
-PAID = _load("order_paid.json")
-UNPAID = _load("order_unpaid.json")
+@pytest.mark.parametrize(
+    "filename", ["order_paid.json", "order_v2_paid.json"]
+)
+def test_paid_fixture_invoice(filename):
+    payload = _load(filename)
+    expected = {
+        "order_id": "o-1001",
+        "customer": "Ada Lovelace",
+        "subtotal_minor": 1999,
+        "tax_minor": 165,
+        "total_minor": 2164,
+        "currency": "USD",
+    }
+    assert invoice_from_order_payload(payload) == expected
 
-EXPECTED = {
-    "order_id": "o-1001",
-    "customer": "Ada Lovelace",
-    "subtotal_minor": 1999,
-    "tax_minor": 165,
-    "total_minor": 2164,
-    "currency": "USD",
-}
 
-
-def test_paid_fixture_invoice():
-    assert invoice_from_order_payload(PAID) == EXPECTED
-
-
-def test_unpaid_fixture_returns_none():
-    assert invoice_from_order_payload(UNPAID) is None
+@pytest.mark.parametrize(
+    "filename", ["order_unpaid.json", "order_v2_unpaid.json"]
+)
+def test_unpaid_fixture_returns_none(filename):
+    payload = _load(filename)
+    assert invoice_from_order_payload(payload) is None
 
 
 def test_cancelled_returns_none():
-    payload = dict(PAID, status="CANCELLED")
+    payload = dict(_load("order_paid.json"), status="CANCELLED")
     assert invoice_from_order_payload(payload) is None

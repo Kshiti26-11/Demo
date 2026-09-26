@@ -1,6 +1,7 @@
-from billing.models.order import OrderDTO
+from billing.adapters.orders_contract import from_rest
 from billing.services.invoice import build_invoice
 
 
 def invoice_from_order_payload(payload: dict) -> dict | None:
-    return build_invoice(OrderDTO.model_validate(payload))
+    view = from_rest(payload)
+    return build_invoice(view)

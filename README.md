@@ -13,9 +13,9 @@ new contract in containers → open a draft PR after a human approves.**
 
 | | |
 |---|---|
-| **Live site** | https://demo-kshiti26-11.vercel.app |
+| **Live site** | https://demo-smoky-six-28.vercel.app |
 | **The upstream change** | [`15f95af...main`](https://github.com/Kshiti26-11/Demo/compare/15f95af008e5...main): orders-service v1 → v2 |
-| **Draft PR opened by SyncSnitch** | [#6](https://github.com/Kshiti26-11/Demo/pull/6): all six checks green, Docker included. The earlier [#5](https://github.com/Kshiti26-11/Demo/pull/5) and [#4](https://github.com/Kshiti26-11/Demo/pull/4) ran without Docker (V3–V5 skipped). |
+| **Draft PR opened by SyncSnitch** | [#11](https://github.com/Kshiti26-11/Demo/pull/11): all six checks green, Docker included. Earlier runs (closed, kept for history) are on the same PR list. |
 | **Run replays** | `/runs` on the site, recorded in [`web/runs/`](web/runs) |
 | **Deeper docs** | [ARCHITECTURE.md](ARCHITECTURE.md) · [WORKFLOW.md](WORKFLOW.md) · [FEATURES.md](FEATURES.md) · [WORK.md](WORK.md) |
 

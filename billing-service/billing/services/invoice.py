@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 
 TAX_RATE = Decimal("0.0825")
-NOT_PAYABLE = {"PENDING", "CANCELLED"}
+NOT_PAYABLE = {"AWAITING_PAYMENT", "PENDING", "CANCELLED"}
 
 
 def _round_half_up(d: Decimal) -> int:

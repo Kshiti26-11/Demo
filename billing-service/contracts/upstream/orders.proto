@@ -1,13 +1,9 @@
 // Orders gRPC contract v2 - owned by orders-service (upstream).
-// v2 = money in minor units, structured customer, PENDING renamed to
-// AWAITING_PAYMENT (same wire number), optional shipping_eta.
-// Reference copy for SyncSnitch - do not edit.
 syntax = "proto3";
 
 package orders;
 
 service OrderLookup {
-  // Returns NOT_FOUND for an unknown order_id.
   rpc GetOrderSummary(GetOrderSummaryRequest) returns (OrderSummary);
 }
 
@@ -24,8 +20,8 @@ enum OrderStatus {
 }
 
 message Money {
-  int64 amount_minor = 1;  // minor units, e.g. 1999 = 19.99 USD
-  string currency = 2;     // ISO 4217, e.g. "USD"
+  int64 amount_minor = 1;
+  string currency = 2;
 }
 
 message Customer {
@@ -40,5 +36,5 @@ message OrderSummary {
   OrderStatus status = 4;
   Customer customer = 5;
   Money total = 6;
-  string shipping_eta = 7;  // RFC 3339 timestamp, empty when unknown
+  string shipping_eta = 7;
 }

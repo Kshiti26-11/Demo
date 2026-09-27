@@ -60,12 +60,14 @@ def from_summary(summary) -> OrderView:
     raw_status = field.enum_type.values_by_number[summary.status].name
     status = normalize_status(raw_status)
 
-    if summary.HasField("customer") and summary.customer.HasField("display_name") or getattr(summary, "customer", None) and summary.customer.display_name:
+    if summary.HasField("customer") and summary.customer.customer_id:
+        customer_name = summary.customer.customer_id
+    elif summary.HasField("customer") and getattr(summary.customer, "display_name", None):
         customer_name = summary.customer.display_name
     elif hasattr(summary, "customer_name") and summary.customer_name:
         customer_name = summary.customer_name
     else:
-        customer_name = getattr(summary.customer, "display_name", "")
+        customer_name = getattr(summary.customer, "customer_id", "") or ""
 
     if summary.HasField("total"):
         amount_minor = summary.total.amount_minor

@@ -95,7 +95,7 @@ a model; every other step is deterministic and costs nothing.
 | **V3** | the consumer's contract tests pass against **upstream v1** in containers (backward compatible) |
 | **V4** | the same tests pass against **upstream v2** in containers. They assert business values (amount 1999, 409 for unpaid, revenue rows), so silent breaks fail. |
 | **V5** | the REST examples served by a Prism contract mock parse in both runs |
-| **V6** | the diff stays inside the consumer, deletes no test and leaves the existing fixtures unchanged |
+| **V6** | the diff stays inside the consumer, deletes no test, and leaves the existing fixtures and contract tests (`tests/integration/test_*`) unchanged |
 
 V3–V5 run in Docker Compose ([`verify/docker-compose.yml`](verify/docker-compose.yml)): Postgres 16, the upstream
 built at v1 or v2 (REST + gRPC), a Prism mock and the consumer's test runner. Without Docker they are reported as
@@ -125,6 +125,11 @@ or `SyncSnitch-Agent: Gemini gemini-3.5-flash (<run>)`). With Gemini, `SYNCSNITC
 when a model's free daily quota runs out. Model strength matters: the run with all six checks green in Docker came
 from `gemini-3.5-flash`, and runs on the weakest fallback (`gemini-3.1-flash-lite`) ended red. A red run keeps the
 gate closed, so nothing is published.
+
+The runner doesn't rely on the model to notice everything. It adds any scanner hit the Tracer leaves out back into
+`impact.json`, and gives the Transformer a checklist of every breaking surface and affected file. It gives the
+Verifier and the fix round the failing assertion from the contract tests (e.g. `amount_minor 0 != 1999`) and the files
+the branch hasn't changed yet. It also tells them to fix the code, never the test.
 
 ---
 
@@ -271,6 +276,8 @@ Not supported yet: consumers in languages other than Python, and contracts in ot
 - **Deterministic checks decide.** A failing check makes the verdict red whatever the model says, and a red run can't
   be approved.
 - **The upstream is read-only** during a run (write-guard hook, sandboxed tools, V6).
+- **Tests can't be bent to fit.** Editing an existing fixture or contract test fails V6, so a fix can't turn red into
+  green by changing what the tests expect.
 - **No secrets in the repo.** Keys live in the gitignored `.env.local` or in GitHub Actions secrets; `gh` uses your
   own login.
 

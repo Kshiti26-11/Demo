@@ -1,0 +1,60 @@
+{# "What a repo needs": opened by any [data-open-requirements] button (error boxes); Esc, x, Got it or a click outside close it.
+   Every line matches the engine: web/webapp/analyze.py (discovery), syncsnitch/detect, syncsnitch/trace, syncsnitch/verify. #}
+<dialog class="req-dialog" id="requirements" aria-labelledby="req-title">
+  <form method="dialog" class="req-close-x"><button type="submit" aria-label="Close">×</button></form>
+  <div class="req-body">
+    <div class="sec-head">
+      <p class="launcher-kicker">Before you open a case</p>
+      <h2 id="req-title">What a repo needs</h2>
+      <span class="label">Requirements for the full S1–S9 run · one GitHub repo with both services</span>
+    </div>
+
+    <section class="req-part">
+      <h3>1 · The upstream service <span class="tech">Owns the contract</span></h3>
+      <ul>
+        <li><strong>REST:</strong> <code>contracts/openapi.yaml</code> in the service folder (or the repo root).</li>
+        <li><strong>gRPC:</strong> a <code>.proto</code> file directly in <code>contracts/</code>.</li>
+        <li><strong>Database:</strong> Alembic migrations in <code>migrations/versions/*.py</code> (new files between base and head).</li>
+        <li><strong>A change to compare:</strong> a commit that edits those contracts. Paste a <code>/pull/&lt;n&gt;</code> or
+          <code>/compare/&lt;base&gt;...&lt;head&gt;</code> link, or SyncSnitch picks the latest contract commit.</li>
+      </ul>
+    </section>
+
+    <section class="req-part">
+      <h3>2 · The consumer service <span class="tech">Gets the fix</span></h3>
+      <ul>
+        <li><strong>Another folder in the same repo</strong> with a <code>pyproject.toml</code> (a Python project).</li>
+        <li><strong>Tests that run with</strong> <code>uv run pytest -q</code>: the Transformer and check V1 use exactly this.</li>
+        <li><strong>Real usage of the changed fields</strong> in <code>.py</code>, <code>.sql</code>, <code>.proto</code> files or JSON
+          fixtures under <code>tests/</code>. No usage means no breaking change for it, and the agents have nothing to fix.</li>
+      </ul>
+    </section>
+
+    <section class="req-part">
+      <h3>3 · Optional <span class="tech">Stronger proof, private repos</span></h3>
+      <ul>
+        <li><strong>A <code>Dockerfile</code> in both services</strong> and Docker on the machine running the site: V3–V5
+          run in containers. Without them they are reported as skipped, never as passed.</li>
+        <li><strong>Private repos:</strong> the server needs <code>GITHUB_TOKEN</code>; opening the draft PR needs
+          <code>gh</code> logged in with push access.</li>
+      </ul>
+    </section>
+
+    <p class="req-note"><strong>Not supported yet:</strong> consumers in other languages than Python, and contracts in other
+      paths. The cold cases on the home page (<code>kshiti26-11/demo</code>: orders-service → billing-service) meet every
+      requirement.</p>
+
+    <form method="dialog" class="req-actions"><button type="submit" class="btn btn-primary">Got it</button></form>
+  </div>
+</dialog>
+<script>
+(() => {
+  const dlg = document.getElementById('requirements');
+  if (!dlg || typeof dlg.showModal !== 'function') return;
+  document.addEventListener('click', (e) => {
+    const opener = e.target.closest('[data-open-requirements]');
+    if (opener) { e.preventDefault(); dlg.showModal(); return; }
+    if (e.target === dlg) dlg.close();  // a click on the backdrop
+  });
+})();
+</script>

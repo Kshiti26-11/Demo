@@ -1,6 +1,8 @@
 /* SyncSnitch console: launcher + live multi-agent orchestrator.
  * Everything shown comes from /api/live/<run> (the real run: S1-S2 on this site, then IBM Bob's events, files and
- * commits). The timing below only paces how real updates are revealed (typing, staggered checks). */
+ * commits). The timing below only paces how real updates are revealed (typing, staggered checks).
+ * The home page has the launcher form; other pages (Stakeout) include only the console and drive it through
+ * window.SyncSnitch: start(runId, query, fresh), onState(fn) for every rendered state, onReset(fn). */
 (() => {
   const boot = JSON.parse(document.getElementById('boot').textContent);
   const bootBob = Boolean(boot.bob);
@@ -23,9 +25,11 @@
   let runId = null, query = '', generation = 0, finished = false, instant = false;
   let seenEvents = new Set(), checkState = {}, typingQueue = [], typing = false, prDone = false, diffLoadedFor = null;
   let gateBusy = false;
+  const stateListeners = [], resetListeners = [];
 
   /* ---------- launcher ---------- */
   function setBusy(busy) {
+    if (!btn) return;
     btn.disabled = busy;
     btn.classList.toggle('is-busy', busy);
     btn.querySelector('.btn-label').textContent = busy ? 'Launching…' : 'Assign detectives';
@@ -47,11 +51,13 @@
       setBusy(false);
     }
   }
-  form.addEventListener('submit', (e) => { e.preventDefault(); launch(); });  // Enter in the input submits too
-  document.querySelectorAll('.chip[data-link]').forEach((chip) => chip.addEventListener('click', () => {
-    input.value = chip.dataset.link;
-    input.focus();
-  }));
+  if (form) {
+    form.addEventListener('submit', (e) => { e.preventDefault(); launch(); });  // Enter in the input submits too
+    document.querySelectorAll('.chip[data-link]').forEach((chip) => chip.addEventListener('click', () => {
+      input.value = chip.dataset.link;
+      input.focus();
+    }));
+  }
 
   /* ---------- console lifecycle ---------- */
   function clearConsole() {
@@ -88,15 +94,18 @@
     consoleEl.classList.remove('is-open');
     consoleEl.setAttribute('aria-hidden', 'true');
     consoleEl.inert = true;
-    if (push) history.pushState({}, '', '/');
+    if (push && form) history.pushState({}, '', '/');
     const gen = generation;
     setTimeout(() => { if (gen === generation) clearConsole(); }, 400);  // not if a new run started meanwhile
-    input.focus();
+    resetListeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
+    if (input) input.focus();
   }
   $('reset-btn').addEventListener('click', () => reset(true));
-  window.addEventListener('popstate', () => {
-    if (location.pathname === '/') reset(false); else location.reload();
-  });
+  if (form) {
+    window.addEventListener('popstate', () => {
+      if (location.pathname === '/') reset(false); else location.reload();
+    });
+  }
 
   async function poll(gen) {
     if (gen !== generation) return;
@@ -255,6 +264,7 @@
     if (s.phase === 'approval') setStream(false, 'AWAITING HUMAN');
     else if (s.phase === 'blocked') setStream(false, 'SETUP NEEDED');
     else setStream(!DONE.includes(s.phase));
+    stateListeners.forEach((fn) => { try { fn(s); } catch (e) { console.error(e); } });
   }
 
   function renderSetup(s) {
@@ -490,5 +500,10 @@
     if (!res.ok) $('actions-btn').disabled = false;
   });
 
+  window.SyncSnitch = {
+    start: (id, q, fresh) => start(id, q || '', Boolean(fresh)),
+    onState: (fn) => { stateListeners.push(fn); },
+    onReset: (fn) => { resetListeners.push(fn); },
+  };
   if (boot.run) start(boot.run, boot.query, false);
 })();

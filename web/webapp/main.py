@@ -32,6 +32,18 @@ def live_badge(request: Request) -> str:
 templates.env.globals["live_badge"] = live_badge
 
 
+def asset(path: str) -> str:
+    """/static/<path>?v=<mtime>: a changed file gets a new URL, so no browser keeps a stale copy."""
+    try:
+        version = int((BASE_DIR / "static" / path).stat().st_mtime)
+    except OSError:
+        version = 0
+    return f"/static/{path}?v={version}"
+
+
+templates.env.globals["asset"] = asset
+
+
 def bob_available() -> bool:
     return bool(BOBIDE) and not live.ON_VERCEL
 
@@ -212,6 +224,8 @@ def analyze_page(request: Request, repo: str = "", upstream: str | None = None, 
     if repo:
         try:
             ctx.update(_analysis(request, repo, upstream, consumer, base, head, consumer_ref, run))
+            # Stakeout starts S3-S9 itself: which engine, whether Docker answers, what is missing
+            ctx.update(runner=agents.runner_status(), bob_available=bob_available())
         except analyze.AnalyzeError as e:
             ctx["error"] = str(e)
     return templates.TemplateResponse(request=request, name="analyze.html", context=ctx,

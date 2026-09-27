@@ -294,13 +294,7 @@ class Sandbox:
                 current.append(tok)
         segments.append(current)
         cwd, outputs = self.cons, []
-        env = {
-            **{k: v for k, v in os.environ.items() if not k.upper().startswith(SECRET_ENV)},
-            "GIT_AUTHOR_NAME": "SyncSnitch",
-            "GIT_AUTHOR_EMAIL": "syncsnitch@local",
-            "GIT_COMMITTER_NAME": "SyncSnitch",
-            "GIT_COMMITTER_EMAIL": "syncsnitch@local",
-        }
+        env = {k: v for k, v in os.environ.items() if not k.upper().startswith(SECRET_ENV)}
         for seg in segments:
             if not seg:
                 raise ToolError("empty command")
@@ -403,9 +397,9 @@ def _error_text(r: httpx.Response) -> str:
 
 
 def _retry_delay(text: str) -> float | None:
-    """Google puts the wait in the error body ("retryDelay": "17s" or "Please retry in 49s")."""
-    m = re.search(r'(?:retry[_ ]?delay"?\s*[:=]\s*"?|Please retry in\s*)(\d+(?:\.\d+)?)s', text, re.IGNORECASE)
-    return (float(m.group(1)) + 1.0) if m else None
+    """Google puts the wait in the error body ("retryDelay": "17s")."""
+    m = re.search(r'retry[_ ]?delay"?\s*[:=]\s*"?(\d+(?:\.\d+)?)s', text, re.IGNORECASE)
+    return float(m.group(1)) if m else None
 
 
 @dataclass

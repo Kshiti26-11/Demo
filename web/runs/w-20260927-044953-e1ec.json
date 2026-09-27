@@ -1,0 +1,1074 @@
+{
+  "run_id": "w-20260927-044953-e1ec",
+  "created_at": "2026-09-27T05:07:22+00:00",
+  "upstream_pr_url": "https://github.com/Kshiti26-11/demo/compare/15f95af008e5...main",
+  "companion_pr_url": "https://github.com/Kshiti26-11/Demo/pull/6",
+  "branch": "syncsnitch/w-20260927-044953-e1ec",
+  "drift": {
+    "run_id": "w-20260927-044953-e1ec",
+    "upstream": {
+      "repo": "Kshiti26-11/demo",
+      "base": "15f95af008e5060450fa81ff0a58ed50627b1b2e",
+      "head": "main",
+      "base_sha": "15f95af008e5060450fa81ff0a58ed50627b1b2e",
+      "head_sha": "48558f7103cb242b8132340dd28832a79e3b1cca"
+    },
+    "changes": [
+      {
+        "id": "rest:Money:schema_added",
+        "surface": "rest",
+        "kind": "schema_added",
+        "location": "Money",
+        "old": null,
+        "new": "Money",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "rest:Customer:schema_added",
+        "surface": "rest",
+        "kind": "schema_added",
+        "location": "Customer",
+        "old": null,
+        "new": "Customer",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "rest:OrderStatus.PENDING:enum_value_removed",
+        "surface": "rest",
+        "kind": "enum_value_removed",
+        "location": "OrderStatus.PENDING",
+        "old": "PENDING",
+        "new": null,
+        "breaking": true,
+        "note": ""
+      },
+      {
+        "id": "rest:OrderStatus.AWAITING_PAYMENT:enum_value_added",
+        "surface": "rest",
+        "kind": "enum_value_added",
+        "location": "OrderStatus.AWAITING_PAYMENT",
+        "old": null,
+        "new": "AWAITING_PAYMENT",
+        "breaking": false,
+        "note": "consumers with exhaustive status handling may break"
+      },
+      {
+        "id": "rest:Order.customer_name:property_removed",
+        "surface": "rest",
+        "kind": "property_removed",
+        "location": "Order.customer_name",
+        "old": "customer_name",
+        "new": null,
+        "breaking": true,
+        "note": ""
+      },
+      {
+        "id": "rest:Order.total_price:property_removed",
+        "surface": "rest",
+        "kind": "property_removed",
+        "location": "Order.total_price",
+        "old": "total_price",
+        "new": null,
+        "breaking": true,
+        "note": ""
+      },
+      {
+        "id": "rest:Order.customer:property_added",
+        "surface": "rest",
+        "kind": "property_added",
+        "location": "Order.customer",
+        "old": null,
+        "new": "customer",
+        "breaking": false,
+        "note": "required property added"
+      },
+      {
+        "id": "rest:Order.total:property_added",
+        "surface": "rest",
+        "kind": "property_added",
+        "location": "Order.total",
+        "old": null,
+        "new": "total",
+        "breaking": false,
+        "note": "required property added"
+      },
+      {
+        "id": "rest:Order.shipping_eta:property_added",
+        "surface": "rest",
+        "kind": "property_added",
+        "location": "Order.shipping_eta",
+        "old": null,
+        "new": "shipping_eta",
+        "breaking": false,
+        "note": "optional property added"
+      },
+      {
+        "id": "grpc:orders.Customer:message_added",
+        "surface": "grpc",
+        "kind": "message_added",
+        "location": "orders.Customer",
+        "old": null,
+        "new": "orders.Customer",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "grpc:orders.Money:message_added",
+        "surface": "grpc",
+        "kind": "message_added",
+        "location": "orders.Money",
+        "old": null,
+        "new": "orders.Money",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "grpc:orders.OrderStatus.1:enum_value_renamed",
+        "surface": "grpc",
+        "kind": "enum_value_renamed",
+        "location": "orders.OrderStatus.1",
+        "old": "ORDER_STATUS_PENDING",
+        "new": "ORDER_STATUS_AWAITING_PAYMENT",
+        "breaking": true,
+        "note": "wire-compatible, source-breaking"
+      },
+      {
+        "id": "grpc:orders.OrderSummary.2:field_removed",
+        "surface": "grpc",
+        "kind": "field_removed",
+        "location": "orders.OrderSummary.2",
+        "old": "customer_name",
+        "new": null,
+        "breaking": true,
+        "note": ""
+      },
+      {
+        "id": "grpc:orders.OrderSummary.3:field_removed",
+        "surface": "grpc",
+        "kind": "field_removed",
+        "location": "orders.OrderSummary.3",
+        "old": "total_price",
+        "new": null,
+        "breaking": true,
+        "note": ""
+      },
+      {
+        "id": "grpc:orders.OrderSummary.5:field_added",
+        "surface": "grpc",
+        "kind": "field_added",
+        "location": "orders.OrderSummary.5",
+        "old": null,
+        "new": "customer",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "grpc:orders.OrderSummary.6:field_added",
+        "surface": "grpc",
+        "kind": "field_added",
+        "location": "orders.OrderSummary.6",
+        "old": null,
+        "new": "total",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "grpc:orders.OrderSummary.7:field_added",
+        "surface": "grpc",
+        "kind": "field_added",
+        "location": "orders.OrderSummary.7",
+        "old": null,
+        "new": "shipping_eta",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "db:orders.total_minor:column_added",
+        "surface": "db",
+        "kind": "column_added",
+        "location": "orders.total_minor",
+        "old": null,
+        "new": "total_minor",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "db:orders.currency:column_added",
+        "surface": "db",
+        "kind": "column_added",
+        "location": "orders.currency",
+        "old": null,
+        "new": "currency",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "db:orders.customer_id:column_added",
+        "surface": "db",
+        "kind": "column_added",
+        "location": "orders.customer_id",
+        "old": null,
+        "new": "customer_id",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "db:orders.shipping_eta:column_added",
+        "surface": "db",
+        "kind": "column_added",
+        "location": "orders.shipping_eta",
+        "old": null,
+        "new": "shipping_eta",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "db:orders.customer_name:column_renamed",
+        "surface": "db",
+        "kind": "column_renamed",
+        "location": "orders.customer_name",
+        "old": "customer_name",
+        "new": "customer_display_name",
+        "breaking": true,
+        "note": ""
+      },
+      {
+        "id": "db:0002_money_customer_status.py:39:data_update",
+        "surface": "db",
+        "kind": "data_update",
+        "location": "0002_money_customer_status.py:39",
+        "old": null,
+        "new": "UPDATE orders SET total_minor = CAST(ROUND(total_price * 100) AS BIGINT)",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "db:0002_money_customer_status.py:40:data_update",
+        "surface": "db",
+        "kind": "data_update",
+        "location": "0002_money_customer_status.py:40",
+        "old": null,
+        "new": "UPDATE orders SET customer_id = 'c-' || SUBSTR(order_id, 3)",
+        "breaking": false,
+        "note": ""
+      },
+      {
+        "id": "db:orders.status.PENDING:value_renamed",
+        "surface": "db",
+        "kind": "value_renamed",
+        "location": "orders.status.PENDING",
+        "old": "PENDING",
+        "new": "AWAITING_PAYMENT",
+        "breaking": true,
+        "note": ""
+      },
+      {
+        "id": "db:orders.total_price:column_dropped",
+        "surface": "db",
+        "kind": "column_dropped",
+        "location": "orders.total_price",
+        "old": "total_price",
+        "new": null,
+        "breaking": true,
+        "note": ""
+      }
+    ],
+    "summary": {
+      "total": 26,
+      "breaking": 9,
+      "by_surface": {
+        "rest": 9,
+        "grpc": 8,
+        "db": 9
+      }
+    }
+  },
+  "candidates": {
+    "run_id": "w-20260927-044953-e1ec",
+    "consumer": "billing-service",
+    "hits": [
+      {
+        "file": "billing/models/order.py",
+        "line": 7,
+        "token": "customer_name",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "usage_kind": "model_field",
+        "symbol": "OrderDTO",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/models/order.py",
+        "line": 8,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "model_field",
+        "symbol": "OrderDTO",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/reports/revenue.sql",
+        "line": 1,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "sql_column",
+        "symbol": "revenue.sql",
+        "endpoints": [
+          "GET /reports/revenue"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 4,
+        "token": "PENDING",
+        "change_ids": [
+          "rest:OrderStatus.PENDING:enum_value_removed",
+          "db:orders.status.PENDING:value_renamed"
+        ],
+        "usage_kind": "literal",
+        "symbol": "NOT_PAYABLE",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 15,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "attribute",
+        "symbol": "build_invoice",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 16,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "attribute",
+        "symbol": "build_invoice",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 21,
+        "token": "customer_name",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "usage_kind": "attribute",
+        "symbol": "build_invoice",
+        "endpoints": [
+          "POST /invoices/{order_id}"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "billing/services/payments.py",
+        "line": 14,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "attribute",
+        "symbol": "status_from_summary",
+        "endpoints": [
+          "GET /payments/{order_id}/status"
+        ],
+        "in_tests": false
+      },
+      {
+        "file": "contracts/upstream/orders.proto",
+        "line": 18,
+        "token": "ORDER_STATUS_PENDING",
+        "change_ids": [
+          "grpc:orders.OrderStatus.1:enum_value_renamed"
+        ],
+        "usage_kind": "proto_field",
+        "symbol": "orders.proto",
+        "endpoints": [],
+        "in_tests": false
+      },
+      {
+        "file": "contracts/upstream/orders.proto",
+        "line": 26,
+        "token": "customer_name",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "usage_kind": "proto_field",
+        "symbol": "orders.proto",
+        "endpoints": [],
+        "in_tests": false
+      },
+      {
+        "file": "contracts/upstream/orders.proto",
+        "line": 27,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "proto_field",
+        "symbol": "orders.proto",
+        "endpoints": [],
+        "in_tests": false
+      },
+      {
+        "file": "tests/fixtures/order_paid.json",
+        "line": 3,
+        "token": "customer_name",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "usage_kind": "fixture",
+        "symbol": "order_paid.json",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/fixtures/order_paid.json",
+        "line": 4,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "fixture",
+        "symbol": "order_paid.json",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/fixtures/order_unpaid.json",
+        "line": 3,
+        "token": "customer_name",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "usage_kind": "fixture",
+        "symbol": "order_unpaid.json",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/fixtures/order_unpaid.json",
+        "line": 4,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "fixture",
+        "symbol": "order_unpaid.json",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/fixtures/order_unpaid.json",
+        "line": 5,
+        "token": "PENDING",
+        "change_ids": [
+          "rest:OrderStatus.PENDING:enum_value_removed",
+          "db:orders.status.PENDING:value_renamed"
+        ],
+        "usage_kind": "fixture",
+        "symbol": "order_unpaid.json",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/unit/test_payments.py",
+        "line": 10,
+        "token": "customer_name",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "usage_kind": "keyword",
+        "symbol": "test_paid_order_summary",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/unit/test_payments.py",
+        "line": 11,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "keyword",
+        "symbol": "test_paid_order_summary",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/unit/test_revenue.py",
+        "line": 11,
+        "token": "PENDING",
+        "change_ids": [
+          "rest:OrderStatus.PENDING:enum_value_removed",
+          "db:orders.status.PENDING:value_renamed"
+        ],
+        "usage_kind": "literal",
+        "symbol": "ROWS",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/unit/test_revenue.py",
+        "line": 28,
+        "token": "customer_name",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "usage_kind": "embedded_text",
+        "symbol": "db_url",
+        "endpoints": [],
+        "in_tests": true
+      },
+      {
+        "file": "tests/unit/test_revenue.py",
+        "line": 28,
+        "token": "total_price",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "usage_kind": "embedded_text",
+        "symbol": "db_url",
+        "endpoints": [],
+        "in_tests": true
+      }
+    ],
+    "summary": {
+      "hits": 21,
+      "files": 9,
+      "endpoints": [
+        "GET /payments/{order_id}/status",
+        "GET /reports/revenue",
+        "POST /invoices/{order_id}"
+      ]
+    }
+  },
+  "impact": {
+    "run_id": "w-20260927-044953-e1ec",
+    "mapping": [
+      {
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "old": "total_price",
+        "new": "total",
+        "rule": "property/field/column removed"
+      },
+      {
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "old": "customer_name",
+        "new": "customer",
+        "rule": "property/field/column removed/renamed"
+      },
+      {
+        "change_ids": [
+          "rest:OrderStatus.PENDING:enum_value_removed",
+          "db:orders.status.PENDING:value_renamed",
+          "grpc:orders.OrderStatus.1:enum_value_renamed"
+        ],
+        "old": "PENDING / ORDER_STATUS_PENDING",
+        "new": "AWAITING_PAYMENT / ORDER_STATUS_AWAITING_PAYMENT",
+        "rule": "enum/status renamed"
+      }
+    ],
+    "affected": [
+      {
+        "file": "billing/models/order.py",
+        "line": 7,
+        "symbol": "OrderDTO",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "surface": "rest",
+        "failure": "loud",
+        "endpoint": "POST /invoices/{order_id}",
+        "fix": "Accept nested customer display_name, falling back to customer_name."
+      },
+      {
+        "file": "billing/models/order.py",
+        "line": 8,
+        "symbol": "OrderDTO",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "rest",
+        "failure": "loud",
+        "endpoint": "POST /invoices/{order_id}",
+        "fix": "Accept nested total field with amount_minor, falling back to total_price."
+      },
+      {
+        "file": "billing/reports/revenue.sql",
+        "line": 1,
+        "symbol": "revenue.sql",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "db",
+        "failure": "loud",
+        "endpoint": "GET /reports/revenue",
+        "fix": "Update query to check alembic_version and SUM total_minor instead of total_price."
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 4,
+        "symbol": "NOT_PAYABLE",
+        "change_ids": [
+          "rest:OrderStatus.PENDING:enum_value_removed",
+          "db:orders.status.PENDING:value_renamed"
+        ],
+        "surface": "rest",
+        "failure": "silent",
+        "endpoint": "POST /invoices/{order_id}",
+        "fix": "Add 'AWAITING_PAYMENT' to NOT_PAYABLE set."
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 15,
+        "symbol": "build_invoice",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "rest",
+        "failure": "loud",
+        "endpoint": "POST /invoices/{order_id}",
+        "fix": "Calculate subtotal from total.amount_minor if present, else fallback to total_price."
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 16,
+        "symbol": "build_invoice",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "rest",
+        "failure": "loud",
+        "endpoint": "POST /invoices/{order_id}",
+        "fix": "Calculate tax from total.amount_minor if present, else fallback to total_price."
+      },
+      {
+        "file": "billing/services/invoice.py",
+        "line": 21,
+        "symbol": "build_invoice",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "surface": "rest",
+        "failure": "loud",
+        "endpoint": "POST /invoices/{order_id}",
+        "fix": "Read customer display_name from customer object or fall back to customer_name."
+      },
+      {
+        "file": "billing/services/payments.py",
+        "line": 14,
+        "symbol": "status_from_summary",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "grpc",
+        "failure": "silent",
+        "endpoint": "GET /payments/{order_id}/status",
+        "fix": "Read amount_minor from total field when present, else fallback to total_price."
+      },
+      {
+        "file": "contracts/upstream/orders.proto",
+        "line": 18,
+        "symbol": "orders.proto",
+        "change_ids": [
+          "grpc:orders.OrderStatus.1:enum_value_renamed"
+        ],
+        "surface": "grpc",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update local proto contract definitions."
+      },
+      {
+        "file": "contracts/upstream/orders.proto",
+        "line": 26,
+        "symbol": "orders.proto",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "surface": "grpc",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update local proto contract definitions."
+      },
+      {
+        "file": "contracts/upstream/orders.proto",
+        "line": 27,
+        "symbol": "orders.proto",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "grpc",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update local proto contract definitions."
+      },
+      {
+        "file": "tests/fixtures/order_paid.json",
+        "line": 3,
+        "symbol": "order_paid.json",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update test fixture with new customer schema."
+      },
+      {
+        "file": "tests/fixtures/order_paid.json",
+        "line": 4,
+        "symbol": "order_paid.json",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update test fixture with new total schema."
+      },
+      {
+        "file": "tests/fixtures/order_unpaid.json",
+        "line": 3,
+        "symbol": "order_unpaid.json",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update test fixture with new customer schema."
+      },
+      {
+        "file": "tests/fixtures/order_unpaid.json",
+        "line": 4,
+        "symbol": "order_unpaid.json",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update test fixture with new total schema."
+      },
+      {
+        "file": "tests/fixtures/order_unpaid.json",
+        "line": 5,
+        "symbol": "order_unpaid.json",
+        "change_ids": [
+          "rest:OrderStatus.PENDING:enum_value_removed",
+          "db:orders.status.PENDING:value_renamed"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update test fixture status to AWAITING_PAYMENT."
+      },
+      {
+        "file": "tests/unit/test_payments.py",
+        "line": 10,
+        "symbol": "test_paid_order_summary",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update gRPC stubs and test cases to use the new customer field."
+      },
+      {
+        "file": "tests/unit/test_payments.py",
+        "line": 11,
+        "symbol": "test_paid_order_summary",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update gRPC stubs and test cases to use the new total field."
+      },
+      {
+        "file": "tests/unit/test_revenue.py",
+        "line": 11,
+        "symbol": "ROWS",
+        "change_ids": [
+          "rest:OrderStatus.PENDING:enum_value_removed",
+          "db:orders.status.PENDING:value_renamed"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update test schema mock data to AWAITING_PAYMENT."
+      },
+      {
+        "file": "tests/unit/test_revenue.py",
+        "line": 28,
+        "symbol": "db_url",
+        "change_ids": [
+          "rest:Order.customer_name:property_removed",
+          "grpc:orders.OrderSummary.2:field_removed",
+          "db:orders.customer_name:column_renamed"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update SQLite test schema mock table columns."
+      },
+      {
+        "file": "tests/unit/test_revenue.py",
+        "line": 28,
+        "symbol": "db_url",
+        "change_ids": [
+          "rest:Order.total_price:property_removed",
+          "grpc:orders.OrderSummary.3:field_removed",
+          "db:orders.total_price:column_dropped"
+        ],
+        "surface": "test",
+        "failure": "none",
+        "endpoint": null,
+        "fix": "Update SQLite test schema mock table columns."
+      }
+    ],
+    "endpoints": [
+      {
+        "endpoint": "POST /invoices/{order_id}",
+        "surface": "rest",
+        "failure": "loud",
+        "why": "Missing required total_price and customer_name fields in the payload causes Pydantic model validation to fail with a ValidationError."
+      },
+      {
+        "endpoint": "GET /payments/{order_id}/status",
+        "surface": "grpc",
+        "failure": "silent",
+        "why": "The deleted total_price gRPC field defaults to 0.0 in proto3 rather than throwing an error, leading to an incorrect amount_minor calculation of 0."
+      },
+      {
+        "endpoint": "GET /reports/revenue",
+        "surface": "db",
+        "failure": "loud",
+        "why": "Dropping the total_price database column causes the SQL query in revenue.sql to throw a ProgrammingError/OperationalError when executed."
+      }
+    ],
+    "migration_notes": "According to RFC-042, 'Float money caused rounding incidents,' requiring a transition to integer minor units plus an ISO 4217 currency. The proposal advises REST consumers to 'read total.amount_minor when present, else round(total_price * 100)' and 'read customer.display_name when present, else customer_name.' For payment state, 'Treat both PENDING and AWAITING_PAYMENT as \"not payable\".' For gRPC, consumers should 'vendor the v2 proto but re-declare fields 2 and 3 as [deprecated = true]' to support both server versions. For SQL, the guidance is to check alembic version and use 'SUM(total_price) for 0001 and SUM(total_minor) for 0002.'"
+  },
+  "verification": {
+    "run_id": "w-20260927-044953-e1ec",
+    "consumer_sha": "4db499cf0ae1f36fe51634651e04cb8c9ead8463",
+    "upstream": {
+      "base_sha": "15f95af008e5060450fa81ff0a58ed50627b1b2e",
+      "head_sha": "48558f7103cb242b8132340dd28832a79e3b1cca"
+    },
+    "checks": [
+      {
+        "id": "V1",
+        "name": "consumer unit tests",
+        "status": "pass",
+        "details": "8 passed, 1 skipped, 1 warning in 0.33s"
+      },
+      {
+        "id": "V2",
+        "name": "v2 fixtures match the new contract",
+        "status": "pass",
+        "details": "3 v2 fixtures match schema"
+      },
+      {
+        "id": "V3",
+        "name": "consumer vs upstream v1 (backward compatible)",
+        "status": "pass",
+        "details": "5/5 passed"
+      },
+      {
+        "id": "V4",
+        "name": "consumer vs upstream v2 (new contract)",
+        "status": "pass",
+        "details": "5/5 passed"
+      },
+      {
+        "id": "V5",
+        "name": "Prism contract examples",
+        "status": "pass",
+        "details": "test_rest_contract_examples_parse passed against v1 and v2"
+      },
+      {
+        "id": "V6",
+        "name": "diff scope",
+        "status": "pass",
+        "details": "13 files changed within scope"
+      }
+    ],
+    "summary": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "verdict": "green"
+    }
+  },
+  "verdict": {
+    "run_id": "w-20260927-044953-e1ec",
+    "verdict": "green",
+    "reasons": [
+      "All contract verification checks (V1-V6) passed."
+    ],
+    "fix_instructions": []
+  },
+  "diff": "diff --git a/billing/adapters/__init__.py b/billing/adapters/__init__.py\nnew file mode 100644\nindex 0000000..e69de29\ndiff --git a/billing/adapters/orders_contract.py b/billing/adapters/orders_contract.py\nnew file mode 100644\nindex 0000000..2381f2c\n--- /dev/null\n+++ b/billing/adapters/orders_contract.py\n@@ -0,0 +1,55 @@\n+from dataclasses import dataclass\n+from decimal import Decimal, ROUND_HALF_UP\n+from typing import Optional\n+\n+@dataclass(frozen=True)\n+class OrderView:\n+    order_id: str\n+    customer_name: str\n+    amount_minor: int\n+    currency: str\n+    status: str\n+    created_at: Optional[str] = None\n+\n+def normalize_status(value: str) -> str:\n+    if value.startswith(\"ORDER_STATUS_\"):\n+        value = value[len(\"ORDER_STATUS_\"):]\n+    return \"AWAITING_PAYMENT\" if value == \"PENDING\" else value\n+\n+def from_rest(payload: dict) -> OrderView:\n+    customer = payload.get(\"customer\", {})\n+    total = payload.get(\"total\", {})\n+    \n+    return OrderView(\n+        order_id=payload[\"order_id\"],\n+        customer_name=customer.get(\"display_name\", payload.get(\"customer_name\", \"Unknown\")),\n+        amount_minor=total.get(\"amount_minor\", int(Decimal(str(payload.get(\"total_price\", 0))) * 100)),\n+        currency=total.get(\"currency\", \"USD\"),\n+        status=normalize_status(payload.get(\"status\", \"UNKNOWN\")),\n+        created_at=payload.get(\"created_at\")\n+    )\n+\n+def from_summary(summary) -> OrderView:\n+    if summary.HasField(\"customer\"):\n+        customer_name = summary.customer.display_name\n+    else:\n+        customer_name = summary.customer_name\n+\n+    if summary.HasField(\"total\"):\n+        amount_minor = summary.total.amount_minor\n+        currency = summary.total.currency\n+    else:\n+        amount_minor = int(Decimal(str(summary.total_price)) * 100)\n+        currency = \"USD\"\n+        \n+    status_enum = type(summary).DESCRIPTOR.fields_by_name[\"status\"].enum_type\n+    status = status_enum.values_by_number[summary.status].name\n+    \n+    return OrderView(\n+        order_id=summary.order_id,\n+        customer_name=customer_name,\n+        amount_minor=amount_minor,\n+        currency=currency,\n+        status=normalize_status(status),\n+        created_at=getattr(summary, \"created_at\", None)\n+    )\ndiff --git a/billing/clients/gen/orders_pb2.py b/billing/clients/gen/orders_pb2.py\nindex 23b66a7..a8faa08 100644\n--- a/billing/clients/gen/orders_pb2.py\n+++ b/billing/clients/gen/orders_pb2.py\n@@ -24,19 +24,27 @@ _sym_db = _symbol_database.Default()\n \n \n \n-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\\n\\x0corders.proto\\x12\\x06orders\\\"*\\n\\x16GetOrderSummaryRequest\\x12\\x10\\n\\x08order_id\\x18\\x01 \\x01(\\t\\\"q\\n\\x0cOrderSummary\\x12\\x10\\n\\x08order_id\\x18\\x01 \\x01(\\t\\x12\\x15\\n\\rcustomer_name\\x18\\x02 \\x01(\\t\\x12\\x13\\n\\x0btotal_price\\x18\\x03 \\x01(\\x01\\x12#\\n\\x06status\\x18\\x04 \\x01(\\x0e\\x32\\x13.orders.OrderStatus*\\x92\\x01\\n\\x0bOrderStatus\\x12\\x1c\\n\\x18ORDER_STATUS_UNSPECIFIED\\x10\\x00\\x12\\x18\\n\\x14ORDER_STATUS_PENDING\\x10\\x01\\x12\\x15\\n\\x11ORDER_STATUS_PAID\\x10\\x02\\x12\\x18\\n\\x14ORDER_STATUS_SHIPPED\\x10\\x03\\x12\\x1a\\n\\x16ORDER_STATUS_CANCELLED\\x10\\x04\\x32V\\n\\x0bOrderLookup\\x12G\\n\\x0fGetOrderSummary\\x12\\x1e.orders.GetOrderSummaryRequest\\x1a\\x14.orders.OrderSummaryb\\x06proto3')\n+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\\n\\x0corders.proto\\x12\\x06orders\\\"*\\n\\x16GetOrderSummaryRequest\\x12\\x10\\n\\x08order_id\\x18\\x01 \\x01(\\t\\\"/\\n\\x05Money\\x12\\x14\\n\\x0c\\x61mount_minor\\x18\\x01 \\x01(\\x03\\x12\\x10\\n\\x08\\x63urrency\\x18\\x02 \\x01(\\t\\\"5\\n\\x08\\x43ustomer\\x12\\x13\\n\\x0b\\x63ustomer_id\\x18\\x01 \\x01(\\t\\x12\\x14\\n\\x0c\\x64isplay_name\\x18\\x02 \\x01(\\t\\\"\\xd1\\x01\\n\\x0cOrderSummary\\x12\\x10\\n\\x08order_id\\x18\\x01 \\x01(\\t\\x12\\x19\\n\\rcustomer_name\\x18\\x02 \\x01(\\tB\\x02\\x18\\x01\\x12\\x17\\n\\x0btotal_price\\x18\\x03 \\x01(\\x01\\x42\\x02\\x18\\x01\\x12#\\n\\x06status\\x18\\x04 \\x01(\\x0e\\x32\\x13.orders.OrderStatus\\x12\\\"\\n\\x08\\x63ustomer\\x18\\x05 \\x01(\\x0b\\x32\\x10.orders.Customer\\x12\\x1c\\n\\x05total\\x18\\x06 \\x01(\\x0b\\x32\\r.orders.Money\\x12\\x14\\n\\x0cshipping_eta\\x18\\x07 \\x01(\\t*\\x9b\\x01\\n\\x0bOrderStatus\\x12\\x1c\\n\\x18ORDER_STATUS_UNSPECIFIED\\x10\\x00\\x12!\\n\\x1dORDER_STATUS_AWAITING_PAYMENT\\x10\\x01\\x12\\x15\\n\\x11ORDER_STATUS_PAID\\x10\\x02\\x12\\x18\\n\\x14ORDER_STATUS_SHIPPED\\x10\\x03\\x12\\x1a\\n\\x16ORDER_STATUS_CANCELLED\\x10\\x04\\x32V\\n\\x0bOrderLookup\\x12G\\n\\x0fGetOrderSummary\\x12\\x1e.orders.GetOrderSummaryRequest\\x1a\\x14.orders.OrderSummaryb\\x06proto3')\n \n _globals = globals()\n _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)\n _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'orders_pb2', _globals)\n if not _descriptor._USE_C_DESCRIPTORS:\n   DESCRIPTOR._loaded_options = None\n-  _globals['_ORDERSTATUS']._serialized_start=184\n-  _globals['_ORDERSTATUS']._serialized_end=330\n+  _globals['_ORDERSUMMARY'].fields_by_name['customer_name']._loaded_options = None\n+  _globals['_ORDERSUMMARY'].fields_by_name['customer_name']._serialized_options = b'\\030\\001'\n+  _globals['_ORDERSUMMARY'].fields_by_name['total_price']._loaded_options = None\n+  _globals['_ORDERSUMMARY'].fields_by_name['total_price']._serialized_options = b'\\030\\001'\n+  _globals['_ORDERSTATUS']._serialized_start=385\n+  _globals['_ORDERSTATUS']._serialized_end=540\n   _globals['_GETORDERSUMMARYREQUEST']._serialized_start=24\n   _globals['_GETORDERSUMMARYREQUEST']._serialized_end=66\n-  _globals['_ORDERSUMMARY']._serialized_start=68\n-  _globals['_ORDERSUMMARY']._serialized_end=181\n-  _globals['_ORDERLOOKUP']._serialized_start=332\n-  _globals['_ORDERLOOKUP']._serialized_end=418\n+  _globals['_MONEY']._serialized_start=68\n+  _globals['_MONEY']._serialized_end=115\n+  _globals['_CUSTOMER']._serialized_start=117\n+  _globals['_CUSTOMER']._serialized_end=170\n+  _globals['_ORDERSUMMARY']._serialized_start=173\n+  _globals['_ORDERSUMMARY']._serialized_end=382\n+  _globals['_ORDERLOOKUP']._serialized_start=542\n+  _globals['_ORDERLOOKUP']._serialized_end=628\n # @@protoc_insertion_point(module_scope)\ndiff --git a/billing/clients/gen/orders_pb2.pyi b/billing/clients/gen/orders_pb2.pyi\nindex ff3c6a0..d7b8dbe 100644\n--- a/billing/clients/gen/orders_pb2.pyi\n+++ b/billing/clients/gen/orders_pb2.pyi\n@@ -1,6 +1,7 @@\n from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper\n from google.protobuf import descriptor as _descriptor\n from google.protobuf import message as _message\n+from collections.abc import Mapping as _Mapping\n from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union\n \n DESCRIPTOR: _descriptor.FileDescriptor\n@@ -8,12 +9,12 @@ DESCRIPTOR: _descriptor.FileDescriptor\n class OrderStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):\n     __slots__ = ()\n     ORDER_STATUS_UNSPECIFIED: _ClassVar[OrderStatus]\n-    ORDER_STATUS_PENDING: _ClassVar[OrderStatus]\n+    ORDER_STATUS_AWAITING_PAYMENT: _ClassVar[OrderStatus]\n     ORDER_STATUS_PAID: _ClassVar[OrderStatus]\n     ORDER_STATUS_SHIPPED: _ClassVar[OrderStatus]\n     ORDER_STATUS_CANCELLED: _ClassVar[OrderStatus]\n ORDER_STATUS_UNSPECIFIED: OrderStatus\n-ORDER_STATUS_PENDING: OrderStatus\n+ORDER_STATUS_AWAITING_PAYMENT: OrderStatus\n ORDER_STATUS_PAID: OrderStatus\n ORDER_STATUS_SHIPPED: OrderStatus\n ORDER_STATUS_CANCELLED: OrderStatus\n@@ -24,14 +25,36 @@ class GetOrderSummaryRequest(_message.Message):\n     order_id: str\n     def __init__(self, order_id: _Optional[str] = ...) -> None: ...\n \n+class Money(_message.Message):\n+    __slots__ = (\"amount_minor\", \"currency\")\n+    AMOUNT_MINOR_FIELD_NUMBER: _ClassVar[int]\n+    CURRENCY_FIELD_NUMBER: _ClassVar[int]\n+    amount_minor: int\n+    currency: str\n+    def __init__(self, amount_minor: _Optional[int] = ..., currency: _Optional[str] = ...) -> None: ...\n+\n+class Customer(_message.Message):\n+    __slots__ = (\"customer_id\", \"display_name\")\n+    CUSTOMER_ID_FIELD_NUMBER: _ClassVar[int]\n+    DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]\n+    customer_id: str\n+    display_name: str\n+    def __init__(self, customer_id: _Optional[str] = ..., display_name: _Optional[str] = ...) -> None: ...\n+\n class OrderSummary(_message.Message):\n-    __slots__ = (\"order_id\", \"customer_name\", \"total_price\", \"status\")\n+    __slots__ = (\"order_id\", \"customer_name\", \"total_price\", \"status\", \"customer\", \"total\", \"shipping_eta\")\n     ORDER_ID_FIELD_NUMBER: _ClassVar[int]\n     CUSTOMER_NAME_FIELD_NUMBER: _ClassVar[int]\n     TOTAL_PRICE_FIELD_NUMBER: _ClassVar[int]\n     STATUS_FIELD_NUMBER: _ClassVar[int]\n+    CUSTOMER_FIELD_NUMBER: _ClassVar[int]\n+    TOTAL_FIELD_NUMBER: _ClassVar[int]\n+    SHIPPING_ETA_FIELD_NUMBER: _ClassVar[int]\n     order_id: str\n     customer_name: str\n     total_price: float\n     status: OrderStatus\n-    def __init__(self, order_id: _Optional[str] = ..., customer_name: _Optional[str] = ..., total_price: _Optional[float] = ..., status: _Optional[_Union[OrderStatus, str]] = ...) -> None: ...\n+    customer: Customer\n+    total: Money\n+    shipping_eta: str\n+    def __init__(self, order_id: _Optional[str] = ..., customer_name: _Optional[str] = ..., total_price: _Optional[float] = ..., status: _Optional[_Union[OrderStatus, str]] = ..., customer: _Optional[_Union[Customer, _Mapping]] = ..., total: _Optional[_Union[Money, _Mapping]] = ..., shipping_eta: _Optional[str] = ...) -> None: ...\ndiff --git a/billing/contract_entrypoints.py b/billing/contract_entrypoints.py\nindex 2822e7c..4e071de 100644\n--- a/billing/contract_entrypoints.py\n+++ b/billing/contract_entrypoints.py\n@@ -1,6 +1,6 @@\n-from .models.order import OrderDTO\n+from .adapters.orders_contract import from_rest\n from .services.invoice import build_invoice\n \n \n def invoice_from_order_payload(payload: dict) -> dict | None:\n-    return build_invoice(OrderDTO.model_validate(payload))\n+    return build_invoice(from_rest(payload))\ndiff --git a/billing/reports/revenue.py b/billing/reports/revenue.py\nindex dc50557..d649247 100644\n--- a/billing/reports/revenue.py\n+++ b/billing/reports/revenue.py\n@@ -2,9 +2,7 @@ from decimal import Decimal, ROUND_HALF_UP\n from pathlib import Path\n \n from sqlalchemy import create_engine, text\n-\n-\n-_SQL = (Path(__file__).parent / \"revenue.sql\").read_text()\n+from sqlalchemy.exc import OperationalError\n \n \n def _round_half_up(d: Decimal) -> int:\n@@ -15,14 +13,30 @@ def run_revenue_report(db_url: str) -> list[dict]:\n     engine = create_engine(db_url)\n     try:\n         with engine.connect() as conn:\n-            rows = conn.execute(text(_SQL)).fetchall()\n+            try:\n+                version = conn.execute(text(\"SELECT version_num FROM alembic_version\")).scalar()\n+            except OperationalError:\n+                version = \"0001\"\n+\n+            if version >= \"0002\":\n+                sql = (Path(__file__).parent / \"revenue_v2.sql\").read_text()\n+                rows = conn.execute(text(sql)).fetchall()\n+                return [\n+                    {\n+                        \"day\": str(row.day)[:10],\n+                        \"revenue_minor\": int(row.revenue),\n+                    }\n+                    for row in rows\n+                ]\n+            else:\n+                sql = (Path(__file__).parent / \"revenue_v1.sql\").read_text()\n+                rows = conn.execute(text(sql)).fetchall()\n+                return [\n+                    {\n+                        \"day\": str(row.day)[:10],\n+                        \"revenue_minor\": _round_half_up(Decimal(str(row.revenue)) * 100),\n+                    }\n+                    for row in rows\n+                ]\n     finally:\n         engine.dispose()\n-\n-    return [\n-        {\n-            \"day\": str(row.day)[:10],\n-            \"revenue_minor\": _round_half_up(Decimal(str(row.revenue)) * 100),\n-        }\n-        for row in rows\n-    ]\ndiff --git a/billing/reports/revenue.sql b/billing/reports/revenue_v1.sql\nsimilarity index 100%\nrename from billing/reports/revenue.sql\nrename to billing/reports/revenue_v1.sql\ndiff --git a/billing/reports/revenue_v2.sql b/billing/reports/revenue_v2.sql\nnew file mode 100644\nindex 0000000..856ee2b\n--- /dev/null\n+++ b/billing/reports/revenue_v2.sql\n@@ -0,0 +1,2 @@\n+SELECT date(created_at) AS day, SUM(total_minor) AS revenue FROM orders\n+WHERE status IN ('PAID', 'SHIPPED') GROUP BY day ORDER BY day\n\\ No newline at end of file\ndiff --git a/billing/services/invoice.py b/billing/services/invoice.py\nindex 61a0c87..2d3e03a 100644\n--- a/billing/services/invoice.py\n+++ b/billing/services/invoice.py\n@@ -1,7 +1,7 @@\n from decimal import Decimal, ROUND_HALF_UP\n \n TAX_RATE = Decimal(\"0.0825\")\n-NOT_PAYABLE = {\"PENDING\", \"CANCELLED\"}\n+NOT_PAYABLE = {\"AWAITING_PAYMENT\", \"CANCELLED\"}\n \n \n def _round_half_up(d: Decimal) -> int:\n@@ -12,8 +12,8 @@ def build_invoice(order) -> dict | None:\n     if order.status in NOT_PAYABLE:\n         return None\n \n-    subtotal = _round_half_up(Decimal(str(order.total_price)) * 100)\n-    tax = _round_half_up(Decimal(str(order.total_price)) * 100 * TAX_RATE)\n+    subtotal = order.amount_minor\n+    tax = _round_half_up(Decimal(subtotal) * TAX_RATE)\n     total = subtotal + tax\n \n     return {\n@@ -22,5 +22,5 @@ def build_invoice(order) -> dict | None:\n         \"subtotal_minor\": subtotal,\n         \"tax_minor\": tax,\n         \"total_minor\": total,\n-        \"currency\": \"USD\",\n+        \"currency\": order.currency,\n     }\ndiff --git a/billing/services/payments.py b/billing/services/payments.py\nindex f04306f..c639fdc 100644\n--- a/billing/services/payments.py\n+++ b/billing/services/payments.py\n@@ -1,21 +1,14 @@\n from decimal import Decimal, ROUND_HALF_UP\n+from ..adapters.orders_contract import from_summary\n \n-PAID_STATES = {\"ORDER_STATUS_PAID\", \"ORDER_STATUS_SHIPPED\"}\n-\n-\n-def _round_half_up(d: Decimal) -> int:\n-    return int(d.quantize(Decimal(\"1\"), rounding=ROUND_HALF_UP))\n-\n+PAID_STATES = {\"PAID\", \"SHIPPED\"}\n \n def status_from_summary(summary) -> dict:\n-    field = type(summary).DESCRIPTOR.fields_by_name[\"status\"]\n-    status_name = field.enum_type.values_by_number[summary.status].name\n-\n-    amount_minor = _round_half_up(Decimal(str(summary.total_price)) * 100)\n-\n+    order = from_summary(summary)\n+    \n     return {\n-        \"order_id\": summary.order_id,\n-        \"paid\": status_name in PAID_STATES,\n-        \"amount_minor\": amount_minor,\n-        \"currency\": \"USD\",\n+        \"order_id\": order.order_id,\n+        \"paid\": order.status in PAID_STATES,\n+        \"amount_minor\": order.amount_minor,\n+        \"currency\": order.currency,\n     }\ndiff --git a/contracts/upstream/orders.proto b/contracts/upstream/orders.proto\nindex cf6836e..eab1ec7 100644\n--- a/contracts/upstream/orders.proto\n+++ b/contracts/upstream/orders.proto\n@@ -1,4 +1,6 @@\n-// Orders gRPC contract v1 - owned by orders-service (upstream).\n+// Orders gRPC contract v2 - owned by orders-service (upstream).\n+// v2 = money in minor units, structured customer, PENDING renamed to\n+// AWAITING_PAYMENT (same wire number), optional shipping_eta.\n // Reference copy for SyncSnitch - do not edit.\n syntax = \"proto3\";\n \n@@ -15,15 +17,28 @@ message GetOrderSummaryRequest {\n \n enum OrderStatus {\n   ORDER_STATUS_UNSPECIFIED = 0;\n-  ORDER_STATUS_PENDING = 1;\n+  ORDER_STATUS_AWAITING_PAYMENT = 1;\n   ORDER_STATUS_PAID = 2;\n   ORDER_STATUS_SHIPPED = 3;\n   ORDER_STATUS_CANCELLED = 4;\n }\n \n+message Money {\n+  int64 amount_minor = 1;  // minor units, e.g. 1999 = 19.99 USD\n+  string currency = 2;     // ISO 4217, e.g. \"USD\"\n+}\n+\n+message Customer {\n+  string customer_id = 1;\n+  string display_name = 2;\n+}\n+\n message OrderSummary {\n   string order_id = 1;\n-  string customer_name = 2;\n-  double total_price = 3;  // major units (USD), e.g. 19.99\n+  string customer_name = 2 [deprecated = true];\n+  double total_price = 3 [deprecated = true];\n   OrderStatus status = 4;\n+  Customer customer = 5;\n+  Money total = 6;\n+  string shipping_eta = 7;  // RFC 3339 timestamp, empty when unknown\n }\ndiff --git a/tests/fixtures/order_v2_paid.json b/tests/fixtures/order_v2_paid.json\nnew file mode 100644\nindex 0000000..7c2d204\n--- /dev/null\n+++ b/tests/fixtures/order_v2_paid.json\n@@ -0,0 +1,13 @@\n+{\n+  \"order_id\": \"o-1001\",\n+  \"customer\": {\n+    \"customer_id\": \"c-1001\",\n+    \"display_name\": \"Ada Lovelace\"\n+  },\n+  \"total\": {\n+    \"amount_minor\": 1999,\n+    \"currency\": \"USD\"\n+  },\n+  \"status\": \"PAID\",\n+  \"created_at\": \"2026-09-01T10:00:00Z\"\n+}\n\\ No newline at end of file\ndiff --git a/tests/fixtures/order_v2_unpaid.json b/tests/fixtures/order_v2_unpaid.json\nnew file mode 100644\nindex 0000000..d623ba9\n--- /dev/null\n+++ b/tests/fixtures/order_v2_unpaid.json\n@@ -0,0 +1,13 @@\n+{\n+  \"order_id\": \"o-1002\",\n+  \"customer\": {\n+    \"customer_id\": \"c-1002\",\n+    \"display_name\": \"Alan Turing\"\n+  },\n+  \"total\": {\n+    \"amount_minor\": 500,\n+    \"currency\": \"USD\"\n+  },\n+  \"status\": \"AWAITING_PAYMENT\",\n+  \"created_at\": \"2026-09-02T11:00:00Z\"\n+}\n\\ No newline at end of file\n",
+  "diffstat": " billing/adapters/__init__.py                    |  0\n billing/adapters/orders_contract.py             | 55 +++++++++++++++++++++++++\n billing/clients/gen/orders_pb2.py               | 22 ++++++----\n billing/clients/gen/orders_pb2.pyi              | 31 ++++++++++++--\n billing/contract_entrypoints.py                 |  4 +-\n billing/reports/revenue.py                      | 38 +++++++++++------\n billing/reports/{revenue.sql => revenue_v1.sql} |  0\n billing/reports/revenue_v2.sql                  |  2 +\n billing/services/invoice.py                     |  8 ++--\n billing/services/payments.py                    | 23 ++++-------\n contracts/upstream/orders.proto                 | 23 +++++++++--\n tests/fixtures/order_v2_paid.json               | 13 ++++++\n tests/fixtures/order_v2_unpaid.json             | 13 ++++++\n 13 files changed, 184 insertions(+), 48 deletions(-)\n",
+  "steps": [
+    {
+      "id": "S1",
+      "name": "Detect contract drift",
+      "type": "deterministic",
+      "status": "done"
+    },
+    {
+      "id": "S2",
+      "name": "Trace consumer usages",
+      "type": "deterministic",
+      "status": "done"
+    },
+    {
+      "id": "S3",
+      "name": "Schema Diff & AST Tracer",
+      "type": "ai",
+      "status": "done"
+    },
+    {
+      "id": "S4",
+      "name": "Downstream Code Transformer",
+      "type": "ai",
+      "status": "done"
+    },
+    {
+      "id": "S5",
+      "name": "Verify in mock containers",
+      "type": "deterministic",
+      "status": "done"
+    },
+    {
+      "id": "S6",
+      "name": "Contract Verifier",
+      "type": "ai",
+      "status": "done"
+    },
+    {
+      "id": "S7",
+      "name": "Human approval",
+      "type": "human",
+      "status": "done"
+    },
+    {
+      "id": "S8",
+      "name": "Open draft companion PR",
+      "type": "deterministic",
+      "status": "done"
+    },
+    {
+      "id": "S9",
+      "name": "Write run artifact",
+      "type": "deterministic",
+      "status": "done"
+    }
+  ],
+  "bob_session_export": ".syncsnitch/runs/w-20260927-044953-e1ec/bob/"
+}

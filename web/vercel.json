@@ -1,10 +1,13 @@
 {
   "functions": {
     "api/index.py": {
-      "includeFiles": "**"
+      "includeFiles": "{webapp,templates,static,runs,scenarios,_vendor}/**"
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index" }
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
   ]
 }

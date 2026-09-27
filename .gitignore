@@ -16,6 +16,25 @@ dist/
 .env.*
 !.env.example
 
+# Generic credential-shaped files (defense in depth, on top of the .env rules above)
+*credentials*
+*credential*
+*secret*
+*password*
+*apikey*
+*api-key*
+*api_key*
+ibmcloud-credentials.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+id_rsa
+id_dsa
+*.ppk
+
 # Tooling
 .vercel/
 node_modules/

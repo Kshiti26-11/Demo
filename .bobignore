@@ -10,6 +10,25 @@ web/_vendor/
 bob_sessions/screenshots/
 bob_sessions/raw/
 
-# Secrets: never let Bob read them
+# Secrets: never let Bob (or an API-model agent) read them
 .env
 .env.*
+*credential*
+*secret*
+*password*
+*apikey*
+*api-key*
+*api_key*
+*API_KEY*
+*ACCESS_TOKEN*
+*access_token*
+*AUTH_TOKEN*
+*auth_token*
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+id_rsa
+id_dsa

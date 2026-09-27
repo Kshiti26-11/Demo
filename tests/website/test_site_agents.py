@@ -304,8 +304,10 @@ def test_a_run_interrupted_by_a_restart_can_be_resumed(env):
 
 def test_runner_status_on_vercel(monkeypatch):
     monkeypatch.setattr(live, "ON_VERCEL", True)
+    monkeypatch.setattr(agents.cloud.analyze, "client", lambda: agents.cloud.analyze.GitHub(None))
     status = agents.runner_status()
-    assert status["ready"] is False and status["problems"][0]["id"] == "vercel"
+    assert status["ready"] is False and status["problems"][0]["id"] == "cloud"  # no GITHUB_TOKEN
+    assert status["where"] == "cloud" and "GITHUB_TOKEN" in status["problems"][0]["fix"]
 
 
 def test_api_key_comes_from_env_local(tmp_path, monkeypatch):

@@ -28,7 +28,7 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import live, llm_agent
+from . import cloud, live, llm_agent
 
 REPO_ROOT = live.REPO_ROOT
 ENV_FILES = (REPO_ROOT / ".env", REPO_ROOT / ".env.local")  # later files win; real environment variables win over both
@@ -190,14 +190,8 @@ def choose_backend(env: dict | None = None) -> tuple[str | None, list[dict]]:
 
 def runner_status() -> dict:
     """Can this server run the three agents by itself? Lists what is missing and the command that fixes it."""
-    if live.ON_VERCEL:
-        return {"ready": False, "where": "vercel", "backend": None, "label": None, "model": None, "unit": "Bobcoins",
-                "docker": False, "budget": budget(), "problems": [{
-                    "id": "vercel", "text": "The agents run on the SyncSnitch runner: this site running on a machine "
-                                            "with IBM Bob Shell or a Gemini / Grok / Claude key. Serverless functions "
-                                            "cannot host an agent session.",
-                    "fix": "git clone https://github.com/kshiti26-11/demo && cd demo && uv sync && "
-                           "bash scripts/run_site.sh"}]}
+    if cloud.enabled():  # the deployed site: the agents run on GitHub Actions (cloud.py)
+        return cloud.status()
     env = local_env()
     backend, problems = choose_backend(env)
     problems = list(problems)
@@ -263,15 +257,13 @@ def start(run_id: str) -> bool:
     spec = _spec(run_id)
     if spec.get("status") != "traced" or not (spec.get("summary") or {}).get("breaking"):
         return False
+    if cloud.enabled():
+        return cloud.start_new(run_id, spec)
     status = runner_status()
     if not status["ready"]:
         first = status["problems"][0]
         _update(run_id, state="blocked", problems=status["problems"], budget=status["budget"])
-        if status["where"] == "vercel":
-            emit(run_id, "S2", "site", "S1-S2 done. The agents run on the local SyncSnitch runner, not on this "
-                                       "serverless deployment", "warn")
-        else:
-            emit(run_id, "S2", "site", f"Cannot start the agents: {first['text']} Fix: {first['fix']}", "error")
+        emit(run_id, "S2", "site", f"Cannot start the agents: {first['text']} Fix: {first['fix']}", "error")
         return False
     runner = spec.get("runner") or {}
     if runner.get("state") in ("approval", "publishing", "complete", "rejected") or is_running(run_id):
@@ -302,7 +294,26 @@ def _gate_open(run_id: str) -> bool:
     return state in ("approval", "publish_failed") or (state == "publishing" and not is_running(run_id))
 
 
+def _cloud(run_id: str, mode: str) -> None:
+    try:
+        cloud.act(run_id, mode)
+    except cloud.CloudError as e:
+        raise StageError(str(e)) from e
+
+
+def resume(run_id: str) -> None:
+    """The page's Start / Resume button."""
+    if cloud.enabled():
+        return _cloud(run_id, "agents")
+    if not start(run_id):
+        problems = runner_status()["problems"]
+        raise StageError(problems[0]["text"] + " Fix: " + problems[0]["fix"] if problems
+                         else "the agents are already running or this run is past them")
+
+
 def approve(run_id: str) -> None:
+    if cloud.enabled():
+        return _cloud(run_id, "publish")
     runner = _spec(run_id).get("runner") or {}
     if not _gate_open(run_id):
         raise StageError("this run is not waiting for approval")
@@ -314,6 +325,8 @@ def approve(run_id: str) -> None:
 
 
 def reject(run_id: str) -> None:
+    if cloud.enabled():
+        return _cloud(run_id, "reject")
     if not _gate_open(run_id):
         raise StageError("this run is not waiting for approval")
     _update(run_id, state="rejected")

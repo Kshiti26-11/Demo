@@ -75,7 +75,12 @@ class GitHub:
         if r.status_code == 404:
             raise AnalyzeError(f"not found on GitHub: {url.removeprefix(API)} (private repo or wrong link?)")
         if r.status_code in (401, 403, 429):
-            raise AnalyzeError(f"GitHub refused the request ({r.status_code}): {r.json().get('message', '')}")
+            msg = str(r.json().get("message", ""))
+            if "rate limit" in msg.lower() and not self.has_token:
+                raise AnalyzeError("GitHub's limit for anonymous requests (60 an hour, shared by every site on this "
+                                   "server's IP) is used up. Fix: set GITHUB_TOKEN on the server (Vercel -> Settings "
+                                   "-> Environment Variables), then redeploy")
+            raise AnalyzeError(f"GitHub refused the request ({r.status_code}): {msg}")
         r.raise_for_status()
         return r.json()
 

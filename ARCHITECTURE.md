@@ -245,7 +245,8 @@ flowchart TB
 - **Live contract matrix:** orders v1/v2 and billing before/after are **mounted in-process** under aliases (`importlib` + relative imports). They're wired with `httpx.ASGITransport` and seeded in-memory SQLite, so there are no network hops and no database server. The cells are live **REST** calls. gRPC and DB results come from the recorded container run.
 - **Try-it:** 4 prebaked contract changes (REST field rename, REST enum rename, gRPC fields removed, DB column changes). The vendored engine runs detect + trace live in under 1 s.
 - **Why the site never imports gRPC stubs:** two versions of `orders.proto` in one process clash in the protobuf descriptor pool ("duplicate file name orders.proto", reproduced in validation). All REST modules import gRPC lazily, and the engine only parses descriptor bytes. `web/requirements.txt` therefore has no `grpcio`.
-- **Robust unattended hosting:** Vercel serverless (no sleeping container), a read-only filesystem, and no secrets. `scripts/vendor_demo_code.sh` pins SHAs in `web/_vendor/PINS.json`.
+- **Cloud runner (no machine needed):** after S1–S2 the Vercel site dispatches `.github/workflows/syncsnitch-agents.yml` in the runner repo (`web/webapp/cloud.py`). The job runs the same runner as a laptop (S3 Tracer, S4 Transformer, S5 verify with Docker V3–V5, S6 Verifier) and force-pushes a snapshot of the run (`state.json`, `diff.patch`, `run/`, `fix.bundle`) to `syncsnitch-live/<run_id>` every few seconds; the page reads it through the GitHub API. Approve and Reject dispatch a second job (`publish` / `reject`) that restores the snapshot and finishes S8–S9. Setup: `scripts/cloud_setup.sh`.
+- **Robust unattended hosting:** Vercel serverless (no sleeping container), a read-only filesystem, and one secret (`GITHUB_TOKEN`, to start the cloud runner). `scripts/vendor_demo_code.sh` pins SHAs in `web/_vendor/PINS.json`.
 
 ---
 

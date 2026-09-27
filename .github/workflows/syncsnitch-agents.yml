@@ -1,0 +1,99 @@
+name: syncsnitch-agents
+# The cloud runner of the deployed website (web/webapp/cloud.py): runs the three agents with no machine of yours.
+# Dispatched by the site after S1-S2 (mode agents), after the human approves (publish) or rejects (reject). The job runs
+# the same runner as a laptop (S2-S9: Tracer, Transformer, verify with Docker V3-V5, Verifier, draft PR) and pushes
+# the live state to the branch syncsnitch-live/<run_id> of this repo, which the site shows.
+# Secrets (bash scripts/cloud_setup.sh sets them): an engine key (GEMINI_API_KEY, GROQ_API_KEY, XAI_API_KEY or
+# ANTHROPIC_API_KEY), optional SYNCSNITCH_* settings, and SYNCSNITCH_PUSH_TOKEN (push + PRs in the analyzed repo).
+run-name: syncsnitch-agents ${{ inputs.mode }} ${{ inputs.run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: SyncSnitch run id (w-YYYYMMDD-HHMMSS-xxxx)
+        required: true
+      mode:
+        description: agents | publish | reject
+        default: agents
+      link:
+        description: GitHub link of the repo to analyze (mode agents, first job)
+        default: ""
+      upstream:
+        description: upstream folder ("" = repo root)
+        default: ""
+      consumer:
+        description: consumer folder ("" = repo root)
+        default: ""
+      base:
+        description: upstream base commit
+        default: ""
+      head:
+        description: upstream head ref
+        default: ""
+      site_url:
+        description: URL of the site that started the run
+        default: ""
+permissions:
+  contents: write
+concurrency:
+  group: syncsnitch-${{ inputs.run_id }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      RUN_ID: ${{ inputs.run_id }}
+      MODE: ${{ inputs.mode }}
+      LINK: ${{ inputs.link }}
+      UPSTREAM_DIR: ${{ inputs.upstream }}
+      CONSUMER_DIR: ${{ inputs.consumer }}
+      BASE_REF: ${{ inputs.base }}
+      HEAD_REF: ${{ inputs.head }}
+      SITE_URL: ${{ inputs.site_url }}
+      GH_TOKEN: ${{ secrets.SYNCSNITCH_PUSH_TOKEN || github.token }}
+      GITHUB_TOKEN: ${{ secrets.SYNCSNITCH_PUSH_TOKEN || github.token }}
+      SYNCSNITCH_RUNNER_REPO: ${{ github.repository }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SYNCSNITCH_AGENT_BACKEND: ${{ secrets.SYNCSNITCH_AGENT_BACKEND }}
+      SYNCSNITCH_TOKEN_BUDGET: ${{ secrets.SYNCSNITCH_TOKEN_BUDGET }}
+      SYNCSNITCH_GEMINI_MODEL: ${{ secrets.SYNCSNITCH_GEMINI_MODEL }}
+      SYNCSNITCH_GEMINI_FALLBACK_MODELS: ${{ secrets.SYNCSNITCH_GEMINI_FALLBACK_MODELS }}
+      SYNCSNITCH_GROQ_MODEL: ${{ secrets.SYNCSNITCH_GROQ_MODEL }}
+      SYNCSNITCH_GROQ_FALLBACK_MODELS: ${{ secrets.SYNCSNITCH_GROQ_FALLBACK_MODELS }}
+      SYNCSNITCH_GROK_MODEL: ${{ secrets.SYNCSNITCH_GROK_MODEL }}
+      SYNCSNITCH_CLAUDE_MODEL: ${{ secrets.SYNCSNITCH_CLAUDE_MODEL }}
+    steps:
+      - name: Validate inputs
+        run: |
+          [[ "$RUN_ID" =~ ^w-[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$ ]] || { echo "::error::bad run id"; exit 1; }
+          [[ "$MODE" =~ ^(agents|publish|reject)$ ]] || { echo "::error::bad mode"; exit 1; }
+      - name: Check out the SyncSnitch code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SYNCSNITCH_CODE_REPO || 'Kshiti26-11/Demo' }}
+          ref: ${{ vars.SYNCSNITCH_CODE_REF || 'main' }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+      - name: Install SyncSnitch
+        run: uv sync --frozen
+      - name: Git identity and GitHub login for the runner
+        run: |
+          gh auth setup-git
+          git config --global user.name "SyncSnitch runner"
+          git config --global user.email "syncsnitch-runner@users.noreply.github.com"
+      - name: Run (${{ inputs.mode }})
+        working-directory: web
+        run: >-
+          ../.venv/bin/python -m webapp.cloud job --mode "$MODE" --run-id "$RUN_ID" --link "$LINK"
+          --upstream "$UPSTREAM_DIR" --consumer "$CONSUMER_DIR" --base "$BASE_REF" --head "$HEAD_REF"
+          --site-url "$SITE_URL"
+      - name: Job summary
+        if: always()
+        run: |
+          f=".syncsnitch/runs/$RUN_ID/VERIFICATION.md"
+          { echo "### SyncSnitch $MODE · $RUN_ID"; echo; echo "Live state: branch \`syncsnitch-live/$RUN_ID\`"; echo;
+            [ -f "$f" ] && cat "$f"; } >> "$GITHUB_STEP_SUMMARY"

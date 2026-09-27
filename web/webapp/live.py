@@ -85,7 +85,7 @@ def validate_overrides(o: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def launch(link: str, site_url: str, overrides: dict | None = None, run_id: str | None = None,
-           background: bool | None = None) -> str:
+           background: bool | None = None, start_agents: bool = True) -> str:
     link = (link or "").strip()
     parsed = analyze.parse_repo_url(link)  # fail fast on a bad link, before anything is created
     overrides = validate_overrides(overrides or {})
@@ -100,13 +100,13 @@ def launch(link: str, site_url: str, overrides: dict | None = None, run_id: str 
     if background is None:
         background = not ON_VERCEL  # serverless functions stop when the response is sent
     if background:
-        threading.Thread(target=_s0_to_s2, args=(run_id, spec), daemon=True).start()
+        threading.Thread(target=_s0_to_s2, args=(run_id, spec, start_agents), daemon=True).start()
     else:
-        _s0_to_s2(run_id, spec)
+        _s0_to_s2(run_id, spec, start_agents)
     return run_id
 
 
-def _s0_to_s2(run_id: str, spec: dict) -> None:
+def _s0_to_s2(run_id: str, spec: dict, start_agents: bool = True) -> None:
     run_dir = _run_dir(run_id)
     try:
         gh = analyze.client()
@@ -150,7 +150,9 @@ def _s0_to_s2(run_id: str, spec: dict) -> None:
                      "summary": s, "hits": len(result["hits"]), "bob_command": f"/syncsnitch {bob_link}",
                      "analyze_url": f"/analyze?{urlencode({k: v for k, v in params.items() if k != 'run'})}"})
         _save_spec(run_id, spec)
-        if breaking:
+        if breaking and not start_agents:
+            pass  # a rebuild of S0-S2 on another serverless instance: the agents were started by the first one
+        elif breaking:
             from . import agents  # noqa: PLC0415 - agents imports this module
 
             agents.start(run_id)  # logs which engine runs the agents, or what is missing
@@ -173,7 +175,7 @@ def ensure(run_id: str, query: dict, site_url: str) -> bool:
     if not query.get("link"):
         return False
     overrides = {k: query[k] for k in ("upstream", "consumer", "base", "head") if query.get(k) is not None}
-    launch(query["link"], site_url, overrides, run_id=run_id, background=False)
+    launch(query["link"], site_url, overrides, run_id=run_id, background=False, start_agents=False)
     return True
 
 

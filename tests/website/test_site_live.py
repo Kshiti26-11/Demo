@@ -36,12 +36,13 @@ def git(cwd, *args):
 
 
 def test_launch_runs_s0_to_s2_then_hands_over_to_the_runner(client):
-    """On Vercel the agents cannot run: the page says so (locally the runner starts them: test_site_agents.py)."""
+    """On Vercel without GITHUB_TOKEN the cloud runner cannot start: the page says what is missing
+    (with a token it dispatches GitHub Actions: test_site_cloud.py; locally the runner starts them: test_site_agents.py)."""
     run_id, url = launch(client)
     assert url.startswith(f"/live/{run_id}?link=")
     s = state(client, run_id)
     assert s["phase"] == "blocked"
-    assert s["runner"]["state"] == "blocked" and s["runner"]["problems"][0]["id"] == "vercel"
+    assert s["runner"]["state"] == "blocked" and s["runner"]["problems"][0]["id"] == "cloud"
     assert s["tracer"]["status"] == "waiting_bob"
     assert (s["tracer"]["breaking"], s["tracer"]["surfaces"]) == (9, ["REST", "gRPC", "DB"])
     assert s["tracer"]["endpoints"] == ["GET /payments/{order_id}/status", "GET /reports/revenue",

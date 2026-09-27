@@ -56,7 +56,10 @@ A running Docker engine = V3–V5 run in mock containers; without it they are re
 On a Mac without Docker Desktop: `brew install colima docker docker-compose docker-buildx`, add
 `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`, then `colima start --cpu 2 --memory 4`
 (run `colima start` again after a reboot).
-On Vercel the page runs S1–S2 only (a serverless function cannot host a Bob session) and points to the local runner.
+On Vercel no machine is needed: the site runs S1–S2, then hands S3–S9 to the **cloud runner** on GitHub Actions
+(`.github/workflows/syncsnitch-agents.yml`, `web/webapp/cloud.py`: the same agents, Docker V3–V5 and the draft PR after
+you approve) and shows it live. One-time setup: `bash scripts/cloud_setup.sh` (runner repo + secrets), then add
+`GITHUB_TOKEN` (Actions: write on the runner repo) in Vercel and redeploy.
 The Repo Analyzer (`/analyze`) shows the full S1–S2 tables and lets you pick upstream/consumer/base/head by hand. The old
 manual path still works too: `/syncsnitch <link>` in a Bob IDE task (shown on the page when this machine is not set up).
 

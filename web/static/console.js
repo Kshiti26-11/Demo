@@ -24,7 +24,7 @@
 
   let runId = null, query = '', generation = 0, finished = false, instant = false;
   let seenEvents = new Set(), checkState = {}, typingQueue = [], typing = false, prDone = false, diffLoadedFor = null;
-  let gateBusy = false;
+  let gateBusy = false, pollMs = 1500;
   const stateListeners = [], resetListeners = [];
 
   /* ---------- launcher ---------- */
@@ -67,7 +67,7 @@
     $('diff-btn').disabled = true;
     ['setup', 'run-error-box', 'resume-btn', 'gate', 'celebrate', 'actions-btn', 'analyze-link', 'coins']
       .forEach((id) => { $(id).hidden = true; });
-    $('actions-note').textContent = ''; $('start-note').textContent = ''; gateBusy = false;
+    $('actions-note').replaceChildren(); $('start-note').textContent = ''; gateBusy = false;
     document.querySelectorAll('[data-f="bob"]').forEach((el, i) => { el.textContent = 'agent ' + Object.values(MODES)[i]; });
     for (const id of ['agent-tracer', 'agent-transformer', 'agent-verifier']) setPill(id, 'queued');
     document.querySelectorAll('#checks li').forEach((li) => setCheck(li, 'waiting', ''));
@@ -111,7 +111,7 @@
     if (gen !== generation) return;
     try {
       const res = await fetch(`/api/live/${encodeURIComponent(runId)}?${query}`, {cache: 'no-store'});
-      if (res.ok) await render(await res.json(), gen);
+      if (res.ok) { const st = await res.json(); pollMs = st.poll_ms || 1500; await render(st, gen); }
       else if (res.status === 404 || res.status === 400) {
         $('run-error').textContent = 'This run is not known here (it may have been cleared).';
         $('run-error').hidden = false;
@@ -120,7 +120,7 @@
     } catch (e) { /* network hiccup: keep polling */ }
     if (gen === generation) {
       instant = false;
-      if (!finished) setTimeout(() => poll(gen), 1500); else setStream(false);
+      if (!finished) setTimeout(() => poll(gen), pollMs); else setStream(false);
     }
   }
 
@@ -174,7 +174,7 @@
     $('resume-btn').hidden = !canResume;
     if (canResume && s.phase !== 'preparing') $('resume-btn').disabled = false;
     if (s.phase === 'interrupted' && !error) {
-      $('run-error').textContent = 'The server restarted while the agents were working. Resume continues from the last finished step.';
+      $('run-error').textContent = 'The runner stopped while the agents were working. Resume continues from the last finished step.';
       $('run-error-box').hidden = false;
     }
     if (s.spec.bob_command) $('bob-cmd').textContent = s.spec.bob_command;
@@ -259,7 +259,12 @@
     if (s.spec.analyze_url) { $('analyze-link').href = s.spec.analyze_url; $('analyze-link').hidden = false; }
     const runnerOn = Boolean(s.runner && s.runner.state !== 'blocked');  // the runner does S5 itself
     $('actions-btn').hidden = runnerOn || !(s.spec.base_sha && !DONE.includes(s.phase) && !s.actions);
-    if (s.actions) $('actions-note').textContent = `GitHub Actions: ${s.actions.status}${s.actions.conclusion ? ' · ' + s.actions.conclusion : ''}`;
+    if (s.actions) {
+      const a = document.createElement('a');
+      a.href = s.actions.html_url; a.target = '_blank'; a.rel = 'noreferrer';
+      a.textContent = `GitHub Actions: ${s.actions.status}${s.actions.conclusion ? ' · ' + s.actions.conclusion : ''} ↗`;
+      $('actions-note').replaceChildren(a);
+    }
     finished = DONE.includes(s.phase) && !(r && r.can_start);
     if (s.phase === 'approval') setStream(false, 'AWAITING HUMAN');
     else if (s.phase === 'blocked') setStream(false, 'SETUP NEEDED');
@@ -292,8 +297,8 @@
       }));
     }
     $('start-btn').disabled = !(r && r.can_start);
-    $('start-btn').hidden = Boolean(r && r.problems.some((p) => p.id === 'vercel'));
-    if (!problems.length && !(r && r.can_start)) $('start-note').textContent = 'Checking this machine…';
+    $('start-btn').hidden = Boolean(r && r.problems.some((p) => p.id === 'cloud'));
+    if (!problems.length && !(r && r.can_start)) $('start-note').textContent = 'Checking the runner…';
   }
 
   const tokens = (n) => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n));
@@ -462,7 +467,7 @@
   document.querySelectorAll('[data-open-bob]').forEach((b) => b.addEventListener('click', openBob));
 
   async function post(action) {
-    const res = await fetch(`/api/live/${encodeURIComponent(runId)}/${action}`, {method: 'POST'});
+    const res = await fetch(`/api/live/${encodeURIComponent(runId)}/${action}?${query}`, {method: 'POST'});
     let data = {};
     try { data = await res.json(); } catch { /* empty body */ }
     if (!res.ok) throw new Error(data.detail || res.statusText);
@@ -470,7 +475,7 @@
   }
   async function startAgents(button, note) {
     button.disabled = true;
-    note.textContent = 'Starting the IBM Bob agents…';
+    note.textContent = 'Starting the 3 agents…';
     try {
       await post('agents');
       note.textContent = '';

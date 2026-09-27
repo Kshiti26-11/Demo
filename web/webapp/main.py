@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from . import agents, analyze, live
+from . import agents, analyze, cloud, live
 from .matrix import get_matrix
 from .tryit import run as run_tryit
 
@@ -158,6 +158,8 @@ def run_detail(request: Request, run_id: str):
             run = analyze.bob_artifact(analyze.client(), run_id, get_runs_dir())
         except analyze.AnalyzeError:
             run = None
+        if run is None and cloud.enabled():  # a run finished by the cloud runner
+            run = cloud.artifact(run_id)
     if run is None:
         return templates.TemplateResponse(request=request, name="not_found.html", status_code=404)
     return templates.TemplateResponse(
@@ -327,7 +329,8 @@ def _live_query(request: Request) -> dict:
 @app.get("/live/{run_id}", response_class=HTMLResponse)
 def live_page(request: Request, run_id: str):
     try:
-        known = live.ensure(run_id, _live_query(request), _site_url(request))
+        known = (cloud.enabled() and cloud.remote_state(run_id) is not None) \
+            or live.ensure(run_id, _live_query(request), _site_url(request))
     except analyze.AnalyzeError:
         known = False
     if not known:
@@ -340,9 +343,12 @@ def live_page(request: Request, run_id: str):
 
 @app.get("/api/live/{run_id}")
 def api_live(request: Request, run_id: str):
-    try:
+    def local() -> dict | None:
         live.ensure(run_id, _live_query(request), _site_url(request))
-        st = live.state(run_id)
+        return live.state(run_id)
+
+    try:
+        st = cloud.live_state(run_id, local) if cloud.enabled() else local()
     except analyze.AnalyzeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if st is None:
@@ -378,14 +384,25 @@ def api_live_verify(run_id: str):
 @app.get("/api/live/{run_id}/diff")
 def api_live_diff(request: Request, run_id: str):
     try:
-        live.ensure(run_id, _live_query(request), _site_url(request))
-        return JSONResponse({"diff": live.diff_text(run_id)}, headers={"Cache-Control": "no-store"})
+        text = cloud.diff(run_id) if cloud.enabled() else None
+        if text is None:
+            live.ensure(run_id, _live_query(request), _site_url(request))
+            text = live.diff_text(run_id)
+        return JSONResponse({"diff": text}, headers={"Cache-Control": "no-store"})
     except analyze.AnalyzeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-def _runner_action(run_id: str, action) -> dict:
-    if not analyze.valid_run_id(run_id) or live.state(run_id) is None:
+def _runner_action(request: Request, run_id: str, action) -> dict:
+    if not analyze.valid_run_id(run_id):
+        raise HTTPException(status_code=404, detail="run not found")
+    if cloud.enabled():  # the page sends the run's query, so a fresh serverless instance can rebuild S0-S2
+        if cloud.remote_state(run_id) is None:
+            try:
+                live.ensure(run_id, _live_query(request), _site_url(request))
+            except analyze.AnalyzeError:
+                pass
+    elif live.state(run_id) is None:
         raise HTTPException(status_code=404, detail="run not found")
     try:
         action(run_id)
@@ -394,28 +411,21 @@ def _runner_action(run_id: str, action) -> dict:
     return {"ok": True}
 
 
-def _start_agents(run_id: str) -> None:
-    if not agents.start(run_id):
-        problems = agents.runner_status()["problems"]
-        raise agents.StageError(problems[0]["text"] + " Fix: " + problems[0]["fix"] if problems
-                                else "the agents are already running or this run is past them")
-
-
 @app.post("/api/live/{run_id}/agents")
-def api_live_agents(run_id: str):
-    """Start the IBM Bob agents for a traced run, or resume one that stopped (e.g. after fixing the setup)."""
-    return _runner_action(run_id, _start_agents)
+def api_live_agents(request: Request, run_id: str):
+    """Start the agents for a traced run, or resume one that stopped (e.g. after fixing the setup)."""
+    return _runner_action(request, run_id, agents.resume)
 
 
 @app.post("/api/live/{run_id}/approve")
-def api_live_approve(run_id: str):
+def api_live_approve(request: Request, run_id: str):
     """S7 approved on the page: the runner opens the DRAFT companion PR (S8) and writes the run artifact (S9)."""
-    return _runner_action(run_id, agents.approve)
+    return _runner_action(request, run_id, agents.approve)
 
 
 @app.post("/api/live/{run_id}/reject")
-def api_live_reject(run_id: str):
-    return _runner_action(run_id, agents.reject)
+def api_live_reject(request: Request, run_id: str):
+    return _runner_action(request, run_id, agents.reject)
 
 
 @app.get("/api/runner")

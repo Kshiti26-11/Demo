@@ -395,9 +395,19 @@ def _fail(run_id: str, message: str) -> None:
 
 
 def _run(cmd: list[str], cwd: Path | None = None, timeout: int = 300, env: dict | None = None) -> tuple[int, str]:
+    run_env = {
+        **os.environ,
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1",
+        "GIT_AUTHOR_NAME": "SyncSnitch",
+        "GIT_AUTHOR_EMAIL": "syncsnitch@local",
+        "GIT_COMMITTER_NAME": "SyncSnitch",
+        "GIT_COMMITTER_EMAIL": "syncsnitch@local",
+        **(env or {}),
+    }
     try:
         out = subprocess.run(cmd, cwd=str(cwd) if cwd else None, capture_output=True, text=True, timeout=timeout,
-                             env=env, stdin=subprocess.DEVNULL)
+                             env=run_env, stdin=subprocess.DEVNULL)
         return out.returncode, (out.stdout or "") + (out.stderr or "")
     except subprocess.TimeoutExpired:
         return 124, f"timed out after {timeout} s: {' '.join(cmd[:4])}"
@@ -424,7 +434,9 @@ def _engine() -> list[str]:
 # --- S2 prepare (deterministic) ---------------------------------------------
 
 def _clone_cmd(repo: str, dest: Path) -> list[str]:
-    """gh uses your GitHub login (private repos work too); plain git for public repos otherwise."""
+    """Clone locally from REPO_ROOT when available to stay offline and avoid gh CLI auth/network commands."""
+    if (REPO_ROOT / ".git").exists():
+        return ["git", "clone", "--quiet", str(REPO_ROOT), str(dest)]
     gh = shutil.which("gh")
     if gh:
         return [gh, "repo", "clone", repo, str(dest), "--", "--quiet"]
@@ -945,17 +957,10 @@ def _publish(run_id: str) -> None:
         if code != 0 or not body.exists():
             raise StageError(f"could not write the PR body: {_tail(out)}")
         emit(run_id, "S8", "engine",
-             f"S8: pushing {ctx['branch']} and opening a DRAFT companion PR against {base_branch}")
-        title = (f"SyncSnitch: make {ctx['cons'] or 'the consumer'} tolerant of the "
-                 f"{ctx['up'] or 'upstream'} contract change")
-        code, out = _run(["bash", str(REPO_ROOT / "scripts" / "open_companion_pr.sh"), str(ctx["cons_path"]),
-                          ctx["branch"], title, str(body), ctx["repo"], "-", base_branch], cwd=REPO_ROOT, timeout=300)
-        m = re.search(r"COMPANION_PR_URL=(\S+)", out)
-        if code != 0 or not m:
-            raise StageError(f"could not open the draft PR: {_tail(out)}")
-        url = m.group(1)
+             f"S8: branch {ctx['branch']} saved locally (remote push/PR disabled)")
+        url = f"local://{ctx['branch']}"
         _update(run_id, companion_pr_url=url)
-        emit(run_id, "S8", "engine", f"Draft companion PR opened: {url}", "ok")
+        emit(run_id, "S8", "engine", f"Branch saved locally: {ctx['branch']} (no remote push)", "ok")
         code, out = _run([*_engine(), "run-artifact", "--run-id", run_id, "--runs-dir", str(live.RUNS_DIR),
                           "--consumer", str(ctx["cons_path"]), "--branch", ctx["branch"],
                           "--base-branch", ctx["head_sha"], "--upstream-pr-url", ctx["compare_url"],

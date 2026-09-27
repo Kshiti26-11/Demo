@@ -161,7 +161,9 @@
     const error = s.spec.error ? 'Stopped: ' + s.spec.error : (r && r.error ? r.error : '');
     $('run-error').textContent = error;
     $('run-error-box').hidden = !error;
-    $('resume-btn').hidden = !(r && r.can_start && ['failed', 'interrupted'].includes(s.phase));
+    const canResume = Boolean(r && r.can_start && ['failed', 'interrupted'].includes(s.phase));
+    $('resume-btn').hidden = !canResume;
+    if (canResume && s.phase !== 'preparing') $('resume-btn').disabled = false;
     if (s.phase === 'interrupted' && !error) {
       $('run-error').textContent = 'The server restarted while the agents were working. Resume continues from the last finished step.';
       $('run-error-box').hidden = false;

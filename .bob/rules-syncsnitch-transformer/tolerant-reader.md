@@ -35,8 +35,18 @@ BASE_REF (default main), UPSTREAM_REPO (default kshiti26-11/orders-service), PR_
 3. SQL -> rename billing/reports/revenue.sql to revenue_v1.sql (unchanged) and add revenue_v2.sql:
        SELECT date(created_at) AS day, SUM(total_minor) AS revenue FROM orders
        WHERE status IN ('PAID', 'SHIPPED') GROUP BY day ORDER BY day
-   In revenue.py first run `SELECT version_num FROM alembic_version`; use v2 when version_num >= "0002"
-   (revenue is already minor units: int(revenue)); otherwise v1 (round-half-up(revenue x 100)). Same JSON output shape.
+   In revenue.py pick the query per database with exactly this helper (the unit tests run on SQLite, the V3/V4
+   containers on PostgreSQL: never query sqlite_master or information_schema, and roll back after a failed query,
+   because PostgreSQL aborts the transaction):
+       def _schema_version(conn) -> str:
+           try:
+               return str(conn.execute(text("SELECT version_num FROM alembic_version")).scalar() or "")
+           except Exception:
+               conn.rollback()
+               return ""
+   Inside the same `with engine.connect() as conn:` block: use revenue_v2.sql when _schema_version(conn) >= "0002"
+   (revenue is already minor units: int(revenue)); otherwise revenue_v1.sql (round-half-up(revenue x 100)).
+   Same JSON output shape.
 4. Fixtures/tests -> keep the existing v1 fixtures (tests/fixtures/order_paid.json, order_unpaid.json). Add tests/fixtures/order_v2_paid.json and order_v2_unpaid.json
    copied from the "paid" / "unpaid" examples of the upstream v2 openapi.yaml
    (`git -C <UPSTREAM> show <HEAD_REF>:./contracts/openapi.yaml`). Parametrize the unit tests over the v1 and

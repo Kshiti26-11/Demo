@@ -127,7 +127,7 @@ def test_link_to_gate_runs_all_three_agents_with_no_bob_ide_step(env):
     assert [c["mode"] for c in made] == ["syncsnitch-tracer", "syncsnitch-transformer", "syncsnitch-verifier"]
     assert all(c["has_key"] and c["opts"]["--trust"] and c["opts"]["--disable-subagents"] for c in made)
     assert [c["opts"]["--max-cost"] for c in made] == ["1.50", "3.85", "4.20"]  # the budget is split, never exceeded
-    assert "change-proposal.md" in made[0]["prompt"] and "PR_NUMBER=null" in made[1]["prompt"]
+    assert "Roll out behind a flag." in made[0]["prompt"] and "PR_NUMBER=null" in made[1]["prompt"]
     assert (env["run_dir"] / "change-proposal.md").read_text().startswith("# Orders v2")
     assert not agents.ACTIVE.exists()  # the write guard is released when the agents are done
 

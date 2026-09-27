@@ -905,21 +905,140 @@ def _runner_facts(ctx: dict) -> list[str]:
     return facts
 
 
+# --- context the runner hands the agents up front (no exploring: fewer turns, fewer tokens) -------------------
+
+PRELOAD_CHARS = 36_000  # consumer files per prompt
+_SKIP_PARTS = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache", "gen", "scripts", "tests"}
+
+
+def _consumer_sources(ctx: dict, extra: list[str] | None = None) -> dict[str, str]:
+    """The consumer files an agent needs, read by the runner: every non-test file the scanner hit, the Python modules
+    that use a hit symbol (e.g. the entry point that validates the DTO, the module that loads the .sql), and extra."""
+    cons, hits = ctx["cons_path"], _scanner_hits(ctx)
+    files = list(hits) + [f for f in extra or [] if f not in hits]
+    symbols = {h.get("symbol") for hs in hits.values() for h in hs if h.get("symbol")} | {Path(f).name for f in hits}
+    symbols.discard(None)
+    for root, dirs, names in os.walk(cons):
+        dirs[:] = sorted(d for d in dirs if d not in _SKIP_PARTS and not d.startswith("."))
+        for name in sorted(names):
+            rel = (Path(root) / name).relative_to(cons).as_posix()
+            if not name.endswith(".py") or rel in files or "_pb2" in name:
+                continue
+            try:
+                text = (Path(root) / name).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if any(sym in text for sym in symbols):
+                files.append(rel)
+    out, total = {}, 0
+    for rel in files:
+        f = cons / rel
+        if not f.is_file():
+            continue
+        text = f.read_text(encoding="utf-8", errors="replace")
+        if total + len(text) > PRELOAD_CHARS:
+            break
+        out[rel], total = text, total + len(text)
+    return out
+
+
+def _added_files(ctx: dict) -> list[str]:
+    """Consumer files the branch added or changed so far (e.g. the adapter), relative to the consumer."""
+    code, out = _run(["git", "-C", str(ctx["cons_path"]), "diff", "--name-only", "--relative", "--diff-filter=AMR",
+                      f"{ctx['head_sha']}...HEAD"])
+    return [f for f in out.split() if code == 0 and f.endswith((".py", ".sql")) and "_pb2" not in f]
+
+
+def _files_block(title: str, files: dict[str, str]) -> str:
+    if not files:
+        return ""
+    body = "\n".join(f"--- {rel}\n{text.rstrip()}" for rel, text in files.items())
+    return f"{title}\n{body}\n--- end of files"
+
+
+def _upstream_contracts(ctx: dict) -> dict[str, str]:
+    """The new (head) upstream contract files for the breaking surfaces, read with git show."""
+    surfaces, up = _breaking_surfaces(ctx), ctx["up"].strip("/")
+    prefix = f"{up}/contracts/" if up else "contracts/"
+    code, out = _git(ctx, "ls-tree", "--name-only", ctx["head_sha"], prefix)
+    names = [n for n in out.split() if code == 0 and (("rest" in surfaces and n.endswith((".yaml", ".yml", ".json")))
+                                                        or ("grpc" in surfaces and n.endswith(".proto")))]
+    files = {}
+    for n in names:
+        code, text = _git(ctx, "show", f"{ctx['head_sha']}:{n}")
+        if code == 0 and len(text) < 20_000:
+            digest = _openapi_digest(text) if n.endswith((".yaml", ".yml")) else text
+            files[f"{n} (upstream head {ctx['head_sha'][:12]}{', examples and schemas only' if digest != text else ''})"] = digest
+    return files
+
+
+def _openapi_digest(text: str) -> str:
+    """What the fix needs from an OpenAPI file: its named examples (the v2 fixtures) and its schemas; the paths
+    section is left out (it is re-sent with every turn of the Transformer)."""
+    lines, keep = text.splitlines(), []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = re.match(r"^(\s*)(examples|schemas):\s*$", line)
+        if m:
+            indent, j = len(m.group(1)), i + 1
+            while j < len(lines) and (not lines[j].strip() or len(lines[j]) - len(lines[j].lstrip()) > indent):
+                j += 1
+            block = lines[i:j]
+            if m.group(2) == "schemas" or any(re.match(r"^\s*value:", b) for b in block):
+                keep += block
+            i = j
+            continue
+        i += 1
+    return "\n".join(keep) + "\n" if keep else text
+
+
+def _drift_lines(ctx: dict) -> str:
+    changes = (live._load(ctx["run_dir"] / "drift.json") or {}).get("changes") or []
+    return "\n".join(f"- {c.get('id')}: {c.get('old')} -> {c.get('new')}" + (f" ({c['note']})" if c.get("note") else "")
+                     for c in changes if isinstance(c, dict) and c.get("breaking"))
+
+
+def _hit_lines(ctx: dict) -> str:
+    hits = (live._load(ctx["run_dir"] / "candidates.json") or {}).get("hits") or []
+    return "\n".join(f"- {h.get('file')}:{h.get('line')} {h.get('token')} [{h.get('usage_kind')}] {h.get('symbol')}"
+                     + (f" -> {', '.join(h['endpoints'])}" if h.get("endpoints") else "") + (" (test)" if h.get("in_tests") else "")
+                     for h in hits if isinstance(h, dict))
+
+
+def _proposal_text(ctx: dict) -> str:
+    f = next(iter(sorted(ctx["run_dir"].glob("change-proposal.*"))), None)
+    if f is None:
+        return ""
+    try:
+        text = llm_agent.docx_text(f.read_bytes()) if f.suffix == ".docx" else f.read_text(encoding="utf-8")
+    except Exception:  # noqa: BLE001 - the proposal is a bonus, never a blocker
+        return ""
+    return text.strip()[:8000]
+
+
 # --- S3 Tracer ---------------------------------------------------------------
 
 def _tracer(ctx: dict) -> None:
     run_id, run_rel = ctx["run_id"], ctx["run_rel"]
     _set_agent(run_id, "tracer", "running", "tracer")
     emit(run_id, "S3", "tracer", "Tracer started: classifying every traced usage as loud or silent")
-    proposal = next(iter(sorted(ctx["run_dir"].glob("change-proposal.*"))), None)
+    proposal = _proposal_text(ctx)
+    sources = _files_block(f"Consumer files (current content; paths under {ctx['cons_rel']}):", _consumer_sources(ctx))
     prompt = f"""SyncSnitch run {run_id}, step S3. You are Subagent 1, the Schema Diff & AST Tracer, running headless from the SyncSnitch website: never ask questions, never edit source code, keep replies short.
 Paths are relative to the workspace root. Upstream (the contract owner, read-only): {ctx['up_rel']}. Consumer: {ctx['cons_rel']}.
-1. Read {run_rel}/drift.json (the contract changes) and {run_rel}/candidates.json (every consumer usage the deterministic scanner found; its file paths are relative to {ctx['cons_rel']}).{f" Read the upstream change proposal {run_rel}/{proposal.name} too." if proposal else ""}
-2. Read only the consumer files candidates.json lists. Confirm or reject each usage and add any the scanner missed.
-3. Write {run_rel}/impact.json with exactly this shape:
+The runner already read everything you need; it is all below. Do not read, list or search other files: answer from this message.
+Breaking contract changes (drift.json):
+{_drift_lines(ctx) or '- none'}
+Consumer usages the deterministic scanner found (candidates.json; paths relative to {ctx['cons_rel']}):
+{_hit_lines(ctx) or '- none'}
+{("Upstream change proposal (text):" + chr(10) + proposal) if proposal else ""}
+{sources}
+1. Confirm or reject each usage and add any the scanner missed, from the files above.
+2. In your first reply, call write_file once to write {run_rel}/impact.json with exactly this shape:
 {{"run_id": "{run_id}", "mapping": [{{"change_ids": ["..."], "old": "...", "new": "...", "rule": "..."}}], "affected": [{{"file": "...", "line": 1, "symbol": "...", "change_ids": ["..."], "surface": "rest|grpc|db|test", "failure": "loud|silent|none", "endpoint": "METHOD /path or null", "fix": "..."}}], "endpoints": [{{"endpoint": "METHOD /path", "surface": "rest|grpc|db", "failure": "loud|silent", "why": "..."}}], "migration_notes": "3-6 sentences{' quoting the proposal' if proposal else ''}"}}
 "loud" = the endpoint fails with an error; "silent" = it returns wrong data without any error. List every consumer endpoint that breaks.
-4. Reply with a 5-line summary."""
+3. Then reply with a 5-line summary."""
     stream = _agent(ctx, "tracer", prompt)
     impact = live._load(ctx["run_dir"] / "impact.json")
     if not isinstance(impact, dict) or not isinstance(impact.get("endpoints"), list):
@@ -953,9 +1072,14 @@ def _transformer(ctx: dict, fix: dict | None = None) -> None:
         emit(run_id, "S4", "transformer", f"Transformer started on branch {branch}: tolerant reader for v1 + v2")
         prompt = f"""SyncSnitch run {run_id}, step S4. You are Subagent 2, the Downstream Code Transformer, running headless from the SyncSnitch website: never ask questions, keep replies short.
 Paths are relative to the workspace root. The consumer {cons_rel} is inside the git clone {ctx['work_rel']}, already on branch {branch}. The upstream {ctx['up_rel']} is read-only.
-1. Read {run_rel}/impact.json and apply .bob/rules-syncsnitch-transformer/tolerant-reader.md exactly, with UPSTREAM={ctx['up_rel']}, HEAD_REF={ctx['head_sha']}, BASE_REF={ctx['base_sha']}, UPSTREAM_REPO={ctx['repo']}, PR_NUMBER=null, RUN_ID={run_id}. Edit only files inside {cons_rel}.
+1. Apply .bob/rules-syncsnitch-transformer/tolerant-reader.md exactly to the impact below ({run_rel}/impact.json), with UPSTREAM={ctx['up_rel']}, HEAD_REF={ctx['head_sha']}, BASE_REF={ctx['base_sha']}, UPSTREAM_REPO={ctx['repo']}, PR_NUMBER=null, RUN_ID={run_id}. Edit only files inside {cons_rel}.
    Required coverage, checked by the runner (it wins over impact.json):
 {_checklist(ctx)}
+   The runner already read the files below: use them instead of reading, listing or searching (git show of the upstream is not needed).
+   Batch your work: in every reply call write_file for ALL the files you can already write (adapter, proto, SQL, fixtures, services together), then regen_stubs and pytest together.
+{_files_block("The Tracer's impact map:", {f"{run_rel}/impact.json": (ctx["run_dir"] / "impact.json").read_text(encoding="utf-8")[:12_000]})}
+{_files_block("New upstream contract files:", _upstream_contracts(ctx))}
+{_files_block(f"Consumer files (current content; paths under {cons_rel}):", _consumer_sources(ctx))}
 2. Run the consumer unit tests until they pass: cd {cons_rel} && uv run pytest -q
 3. Commit on {branch}: {commit.format(what=f"tolerant reader for the {up_name} contract change")}
    Do not push.
@@ -975,6 +1099,7 @@ Apply these fix instructions, editing only files inside {cons_rel}:
 {todo}
 Facts the runner checked; they win over any instruction above (skip an instruction that edits {CONTRACT_TESTS} or changes a billing response):
 {facts or '- none'}
+{_files_block(f"Current content of the files involved (paths under {cons_rel}; the runner read them from {branch}):", _consumer_sources(ctx, extra=_added_files(ctx)))}
 Then run cd {cons_rel} && uv run pytest -q until green, and commit on {branch}: {commit.format(what="address the Contract Verifier findings")}
 Do not push. Reply with one line."""
     stream = _agent(ctx, "transformer", prompt)

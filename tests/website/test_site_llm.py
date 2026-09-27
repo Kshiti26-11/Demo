@@ -19,7 +19,7 @@ USAGE = 1700  # tokens per fake response
 def plan(agent: str, prompt: str, turn: int) -> tuple[list[tuple], bool]:
     """What the scripted model does: a list of ("text", str) / ("call", id, name, args), and whether it is done."""
     if agent == "tracer":
-        run = re.search(r"Read (\S+?)/drift\.json", prompt).group(1)
+        run = re.search(r"to write (\S+?)/impact\.json", prompt).group(1)
         cons = re.search(r"Consumer: (\S+?)\.\n", prompt).group(1)
         if turn == 0:
             return [("text", "Reading the **drift** first."), ("call", "c1", "read_file", {"path": f"{run}/drift.json"}),
@@ -370,6 +370,47 @@ def test_a_used_up_daily_quota_moves_to_the_next_model(env, api, monkeypatch):  
     msgs = [e["msg"] for e in s["events"]]
     assert any(f"{first}: the daily quota is used up, switching to backup-model" in m for m in msgs)
     assert any("session finished" in m and m.endswith("backup-model") for m in msgs)
+
+
+def test_an_overloaded_model_hands_the_step_to_the_next_model_at_once(env, api, monkeypatch):  # noqa: F811
+    """Run w-20260927-092147-9661: gemini-3.7-flash answered "503 high demand" and the runner retried for 5.5 min,
+    then stopped the Tracer. Now it retries twice (short waits) and moves the same step to the next model."""
+    fallback_env = llm_agent.PROVIDERS[api.provider].get("fallback_env")
+    if not fallback_env:
+        pytest.skip("this engine has no fallback models")
+    first = llm_agent.PROVIDERS[api.provider]["default_model"]
+    monkeypatch.setenv(fallback_env, "backup-model")
+    monkeypatch.setattr(llm_agent.time, "sleep", lambda s: None)
+    used = []
+
+    def busy(request):
+        body = json.loads(request.content)
+        used.append(body["model"])
+        if body["model"] == first:
+            return httpx.Response(503, json={"error": {"code": 503, "status": "UNAVAILABLE", "message": "This model "
+                                                       "is currently experiencing high demand."}})
+        return api(request)
+    monkeypatch.setattr(llm_agent, "_client", lambda: httpx.Client(transport=httpx.MockTransport(busy)))
+    s = run_agents(env)
+    assert s["phase"] == "approval" and s["verifier"]["verdict"] == "green", s["runner"].get("error")
+    assert used[:4] == [first, first, first, "backup-model"]  # the first request plus two short retries
+    msgs = [e["msg"] for e in s["events"]]
+    assert any(f"{first} is overloaded right now, switching to backup-model" in m for m in msgs)
+
+
+def test_older_tool_outputs_are_shortened_before_each_request():
+    """Every turn re-sends the conversation: the newest tool outputs go in full, older ones are cut."""
+    big = "x" * 20_000
+    msgs = [{"role": "system", "content": "s"}, {"role": "user", "content": big}]
+    for i in range(4):
+        msgs += [{"role": "assistant", "content": "", "tool_calls": [{"id": f"c{i}"}]},
+                 {"role": "tool", "tool_call_id": f"c{i}", "content": f"{i}" + big}]
+    out = llm_agent.compact(msgs)
+    tools = [m["content"] for m in out if m["role"] == "tool"]
+    assert len(tools[-1]) == 20_001  # the latest call's output always goes in full, whatever its size
+    assert len(tools[0]) < 600 and "dropped to save tokens" in tools[0]
+    assert out[1]["content"] == big and msgs[3]["content"].startswith("0x") and len(msgs[3]["content"]) == 20_001
+    assert [m.get("tool_call_id") for m in out] == [m.get("tool_call_id") for m in msgs]
 
 
 def test_when_every_model_is_out_of_quota_the_run_stops_without_asking(env, api, monkeypatch):  # noqa: F811

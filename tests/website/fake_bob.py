@@ -53,7 +53,7 @@ def main() -> int:
     out({"type": "message", "role": "assistant", "isReasoning": True, "content": "thinking about it"})
     out({"type": "message", "role": "assistant", "content": "Reading the **run** files"})
     out({"type": "message", "role": "assistant", "content": " for this step.\n"})
-    m = re.search(r"Read (\S+?)/(?:drift|impact|verification)\.json", prompt)
+    m = re.search(r"(?:Read|write|\() ?(\S+?)/(?:drift|impact|verification)\.json", prompt)
     run_rel = m.group(1) if m else ""
     run_dir = Path(run_rel) if Path(run_rel).is_absolute() else ws / run_rel
     run_id = run_dir.name

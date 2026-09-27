@@ -63,7 +63,9 @@ PROVIDERS = {
 }
 ANTHROPIC_VERSION = "2023-06-01"
 MAX_OUTPUT_TOKENS = 16000
-MAX_TURNS = {"tracer": 30, "transformer": 60, "verifier": 12}
+MAX_TURNS = {"tracer": 12, "transformer": 50, "verifier": 8}  # the runner hands each agent its files up front
+KEEP_TOOL_CHARS = 14_000  # older tool outputs beyond this (newest first) are shortened before each request
+READ_LINES, READ_CHARS, SEARCH_HITS = 400, 40_000, 60
 MODES = {"tracer": "syncsnitch-tracer", "transformer": "syncsnitch-transformer", "verifier": "syncsnitch-verifier"}
 SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache"}
 SECRET_ENV = ("ANTHROPIC", "XAI", "OPENAI", "GEMINI", "GOOGLE_API", "GROQ", "BOB_", "GITHUB_TOKEN", "GH_TOKEN", "CLAUDE")
@@ -207,6 +209,10 @@ class QuotaError(ToolError):
     """The model's daily quota is used up: it will not answer again today, another model may."""
 
 
+class OverloadError(ToolError):
+    """The model is overloaded right now ("503 high demand"): another model may answer at once."""
+
+
 def _within(p: Path, root: Path) -> bool:
     return p == root or root in p.parents
 
@@ -272,10 +278,10 @@ class Sandbox:
         text = docx_text(data) if p.suffix.lower() == ".docx" else data.decode("utf-8", errors="replace")
         lines = text.splitlines()
         start = max(1, int(start_line or 1))
-        end = min(len(lines), int(end_line or start + 1999))
+        end = min(len(lines), int(end_line or start + READ_LINES - 1))
         body = "\n".join(f"{i:5}  {lines[i - 1]}" for i in range(start, end + 1))
         more = f"\n... ({len(lines) - end} more lines; use start_line)" if end < len(lines) else ""
-        return (body + more)[:120_000] or "(empty file)"
+        return (body + more)[:READ_CHARS] or "(empty file)"
 
     def list_dir(self, path: str) -> str:
         p = self.readable(path)
@@ -300,8 +306,8 @@ class Sandbox:
                 for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
                     if rx.search(line):
                         hits.append(f"{f.relative_to(REPO_ROOT) if _within(f, REPO_ROOT) else f}:{n}: {line[:200]}")
-                        if len(hits) >= 200:
-                            return "\n".join(hits) + "\n... (first 200 matches)"
+                        if len(hits) >= SEARCH_HITS:
+                            return "\n".join(hits) + f"\n... (first {SEARCH_HITS} matches: narrow the pattern or the path)"
             except (UnicodeDecodeError, OSError):
                 continue
         return "\n".join(hits) or "no matches"
@@ -403,7 +409,7 @@ def _post(client: httpx.Client, provider: str, key: str, body: dict) -> dict:
     headers = ({"x-api-key": key, "anthropic-version": ANTHROPIC_VERSION} if provider == "claude"
                else {"authorization": f"Bearer {key}"})  # xAI, and the OpenAI-compatible endpoints (Gemini, Groq)
     headers["content-type"] = "application/json"
-    attempts = 8
+    attempts, busy = 8, 0
     for attempt in range(attempts):
         try:
             r = client.post(api_url(provider), headers=headers, json=body)
@@ -415,7 +421,14 @@ def _post(client: httpx.Client, provider: str, key: str, body: dict) -> dict:
         if r.status_code == 200:
             return r.json()
         daily = "per day" in r.text.lower() or "perday" in r.text.lower()  # a daily quota will not come back soon
-        if r.status_code in (429, 500, 502, 503, 504, 529) and attempt < attempts - 1 and not daily:
+        overloaded = r.status_code in (503, 529) or any(w in r.text.lower() for w in ("high demand", "overloaded"))
+        if overloaded and not daily:  # two short retries, then let the loop try another model instead of waiting
+            busy += 1
+            if busy <= 2 and attempt < attempts - 1:
+                time.sleep(3 * busy)
+                continue
+            raise OverloadError(f"{p['label']} API {r.status_code}: {str(_error_text(r))[:300]}")
+        if r.status_code in (429, 500, 502, 504) and attempt < attempts - 1 and not daily:
             wait = r.headers.get("retry-after") or _retry_delay(r.text) or 2 ** (attempt + 1)
             time.sleep(min(60.0, float(wait)))
             continue
@@ -544,6 +557,26 @@ class _XAI:
                     truncated=resp.get("status") == "incomplete" and not calls)
 
 
+def compact(messages: list[dict]) -> list[dict]:
+    """The conversation to send: the newest tool outputs in full (KEEP_TOOL_CHARS), older ones cut to their first
+    lines. Every turn re-sends the whole conversation, so without this a 40-turn session costs over a million tokens."""
+    out, budget = list(messages), KEEP_TOOL_CHARS
+    last_call = max((i for i, m in enumerate(out) if m.get("role") == "assistant"), default=-1)
+    for i in range(last_call - 1, -1, -1):  # the outputs of the latest calls always go in full
+        m = out[i]
+        text = m.get("content") if m.get("role") == "tool" else None
+        if not isinstance(text, str):
+            continue
+        if len(text) <= budget:
+            budget -= len(text)
+            continue
+        budget = 0
+        if len(text) > 600:
+            out[i] = {**m, "content": text[:400] + f"\n... [{len(text) - 400:,} more characters of this earlier tool "
+                                                    "output were dropped to save tokens; read it again if you need it]"}
+    return out
+
+
 class _OpenAIChat:
     """OpenAI-compatible chat completions (Gemini, Groq): the whole conversation every turn. Assistant messages are
     sent back exactly as received, so provider extras (e.g. Gemini's thought signatures) survive."""
@@ -567,7 +600,7 @@ class _OpenAIChat:
                               for cid, out, err in results]
         elif note:
             self.messages.append({"role": "user", "content": note})
-        resp = _post(self.client, self.provider, self.key, {"model": self.model, "messages": self.messages,
+        resp = _post(self.client, self.provider, self.key, {"model": self.model, "messages": compact(self.messages),
                                                            "tools": self.tools, "tool_choice": "auto",
                                                            "max_tokens": MAX_OUTPUT_TOKENS})
         choice = (resp.get("choices") or [{}])[0]
@@ -625,7 +658,7 @@ def run(provider: str, ctx: dict, agent: str, prompt: str, cap_tokens: int, env:
     if on_model and model != model_of(provider, env):
         on_model(model)
     box = Sandbox(ctx, agent)
-    started, tool_calls = time.monotonic(), 0
+    started, tool_calls, overloads = time.monotonic(), 0, 0
     with _client() as client:
         sys_prompt, specs = system_prompt(agent, provider, model), tool_specs(provider, AGENT_TOOLS[agent])
         if provider == "claude":
@@ -642,6 +675,24 @@ def run(provider: str, ctx: dict, agent: str, prompt: str, cap_tokens: int, env:
                 break
             try:
                 turn = session.step(results, note)
+            except OverloadError as e:
+                overloads += 1
+                live_models = available_models(provider, env)[0]
+                i = live_models.index(session.model) if session.model in live_models else -1
+                others = [m for m in live_models[i + 1:] + live_models[:max(i, 0)] if m != session.model]
+                if others and overloads <= 2 * len(live_models):
+                    say(f"{session.model} is overloaded right now, switching to {others[0]}", "warn")
+                    session.model = res.model = others[0]
+                    if on_model:
+                        on_model(others[0])
+                    continue
+                if overloads <= 3:
+                    say(f"{session.model} is overloaded right now, trying again in 20 s", "warn")
+                    time.sleep(20)
+                    continue
+                res.errors.append(str(e))
+                say(str(e), "error")
+                break
             except QuotaError as e:
                 mark_exhausted(provider, session.model)
                 nxt = next((m for m in models[models.index(session.model) + 1:]), None)

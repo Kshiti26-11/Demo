@@ -1,21 +1,14 @@
 from decimal import Decimal, ROUND_HALF_UP
+from ..adapters.orders_contract import from_summary
 
-PAID_STATES = {"ORDER_STATUS_PAID", "ORDER_STATUS_SHIPPED"}
-
-
-def _round_half_up(d: Decimal) -> int:
-    return int(d.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-
+PAID_STATES = {"PAID", "SHIPPED"}
 
 def status_from_summary(summary) -> dict:
-    field = type(summary).DESCRIPTOR.fields_by_name["status"]
-    status_name = field.enum_type.values_by_number[summary.status].name
-
-    amount_minor = _round_half_up(Decimal(str(summary.total_price)) * 100)
-
+    order = from_summary(summary)
+    
     return {
-        "order_id": summary.order_id,
-        "paid": status_name in PAID_STATES,
-        "amount_minor": amount_minor,
-        "currency": "USD",
+        "order_id": order.order_id,
+        "paid": order.status in PAID_STATES,
+        "amount_minor": order.amount_minor,
+        "currency": order.currency,
     }

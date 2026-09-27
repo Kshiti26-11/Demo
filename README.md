@@ -310,8 +310,8 @@ Not supported yet: consumers in languages other than Python, and contracts in ot
 
 ## Team
 
-| | Owns |
-|---|---|
+| | 
+|---|
 | [@Kshiti26-11](https://github.com/Kshiti26-11) |
 | [@Cybverse-Pkians](https://github.com/Cybverse-Pkians) | 
 | [@nishthaa-06](https://github.com/nishthaa-06) | 

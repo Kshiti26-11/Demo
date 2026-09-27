@@ -1,19 +1,20 @@
 from decimal import Decimal, ROUND_HALF_UP
+from ..adapters.orders_contract import OrderView
 
 TAX_RATE = Decimal("0.0825")
-NOT_PAYABLE = {"PENDING", "CANCELLED"}
+NOT_PAYABLE = {"AWAITING_PAYMENT", "CANCELLED"}
 
 
 def _round_half_up(d: Decimal) -> int:
     return int(d.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
-def build_invoice(order) -> dict | None:
+def build_invoice(order: OrderView) -> dict | None:
     if order.status in NOT_PAYABLE:
         return None
 
-    subtotal = _round_half_up(Decimal(str(order.total_price)) * 100)
-    tax = _round_half_up(Decimal(str(order.total_price)) * 100 * TAX_RATE)
+    subtotal = order.amount_minor
+    tax = _round_half_up(Decimal(subtotal) * TAX_RATE)
     total = subtotal + tax
 
     return {
@@ -22,5 +23,5 @@ def build_invoice(order) -> dict | None:
         "subtotal_minor": subtotal,
         "tax_minor": tax,
         "total_minor": total,
-        "currency": "USD",
+        "currency": order.currency,
     }

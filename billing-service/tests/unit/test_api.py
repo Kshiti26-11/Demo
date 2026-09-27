@@ -13,9 +13,6 @@ def _load(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
 
 
-PAID = _load("order_paid.json")
-UNPAID = _load("order_unpaid.json")
-
 EXPECTED_INVOICE = {
     "order_id": "o-1001",
     "customer": "Ada Lovelace",
@@ -26,47 +23,37 @@ EXPECTED_INVOICE = {
 }
 
 
-class MockTransport(httpx.MockTransport if hasattr(httpx, "MockTransport") else object):
-    pass
-
-
-def _make_mock_transport():
-    """Build an httpx transport that returns fixtures or 404."""
+@pytest.mark.parametrize("paid_fixture,unpaid_fixture", [
+    ("order_paid.json", "order_unpaid.json"),
+    ("order_v2_paid.json", "order_v2_unpaid.json"),
+])
+def test_invoice_endpoints(paid_fixture, unpaid_fixture):
+    paid = _load(paid_fixture)
+    unpaid = _load(unpaid_fixture)
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path == "/orders/o-1001":
-            return httpx.Response(200, json=PAID)
+            return httpx.Response(200, json=paid)
         elif path == "/orders/o-1002":
-            return httpx.Response(200, json=UNPAID)
+            return httpx.Response(200, json=unpaid)
         else:
             return httpx.Response(404, json={"detail": "order not found"})
 
-    return httpx.MockTransport(handler)
-
-
-@pytest.fixture
-def client():
-    transport = _make_mock_transport()
+    transport = httpx.MockTransport(handler)
     app = create_app(
         orders_rest_url="http://test",
         orders_rest_transport=transport,
     )
     from fastapi.testclient import TestClient
-    return TestClient(app)
+    client = TestClient(app)
 
-
-def test_invoice_paid_order(client):
     r = client.post("/invoices/o-1001")
     assert r.status_code == 201
     assert r.json() == EXPECTED_INVOICE
 
-
-def test_invoice_unpaid_order(client):
     r = client.post("/invoices/o-1002")
     assert r.status_code == 409
 
-
-def test_invoice_unknown_order(client):
     r = client.post("/invoices/o-9999")
     assert r.status_code == 404

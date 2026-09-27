@@ -10,9 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from . import agents, analyze, cloud, live
-from .matrix import get_matrix
-from .tryit import run as run_tryit
+from . import agents, analyze, cloud, history, live
+from . import tryit
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -49,7 +48,9 @@ def bob_available() -> bool:
 
 
 class TryRequest(BaseModel):
-    scenario: str
+    repo: str = ""
+    path: str
+    text: str
 
 
 class LaunchRequest(BaseModel):
@@ -85,23 +86,20 @@ def load_run(run_id: str) -> dict | None:
 
 
 def list_runs() -> list[dict]:
-    runs_dir = get_runs_dir()
-    real_runs = []
-    sample_runs = []
-    for f in runs_dir.glob("*.json"):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            if f.name.startswith("_"):
-                data["is_sample"] = True
-                sample_runs.append(data)
-            else:
-                data["is_sample"] = False
-                real_runs.append(data)
-        except Exception:
-            continue
-
-    real_runs.sort(key=lambda r: r.get("created_at") or "", reverse=True)
-    return real_runs + sample_runs
+    """Every real run (history.py: published replays, the cloud runner's live branches, this machine's runs).
+    The illustrative sample only shows while there is no real run at all."""
+    real = history.all_runs()
+    if real:
+        return real
+    samples = []
+    for f in sorted(get_runs_dir().glob("_*.json")):
+        data = live._load(f) or {}
+        samples.append(history._row(f.stem, created_at=data.get("created_at") or "", is_sample=True,
+                                    verdict=history._verdict(data.get("verdict")), source="sample",
+                                    checks=history._checks(data.get("verification")),
+                                    companion_pr_url=data.get("companion_pr_url"),
+                                    upstream_url=data.get("upstream_pr_url")))
+    return samples
 
 
 def impact_mermaid(run: dict) -> str:
@@ -158,8 +156,11 @@ def run_detail(request: Request, run_id: str):
             run = analyze.bob_artifact(analyze.client(), run_id, get_runs_dir())
         except analyze.AnalyzeError:
             run = None
-        if run is None and cloud.enabled():  # a run finished by the cloud runner
-            run = cloud.artifact(run_id)
+        if run is None:  # a run the cloud runner published (its live branch holds artifact.json)
+            try:
+                run = cloud.artifact(run_id)
+            except Exception:  # noqa: BLE001 - GitHub unreachable: fall through to 404
+                run = None
     if run is None:
         return templates.TemplateResponse(request=request, name="not_found.html", status_code=404)
     return templates.TemplateResponse(
@@ -167,23 +168,31 @@ def run_detail(request: Request, run_id: str):
     )
 
 @app.get("/matrix", response_class=HTMLResponse)
-def matrix(request: Request):
-    mat = get_matrix()
-    return templates.TemplateResponse(request=request, name="matrix.html", context={"matrix": mat})
+def matrix(request: Request, run: str | None = None):
+    return templates.TemplateResponse(request=request, name="matrix.html", context={"lineup": history.lineup(run)})
 
 @app.get("/api/matrix")
-def api_matrix():
-    return get_matrix()
+def api_matrix(run: str | None = None):
+    return history.lineup(run)
 
 @app.get("/try", response_class=HTMLResponse)
 def try_it(request: Request):
     return templates.TemplateResponse(request=request, name="try.html")
 
+@app.get("/api/try/contracts")
+def api_try_contracts(repo: str = ""):
+    """Commit a crime: the repo's real contract files at the upstream head, plus one-click crimes built from them."""
+    try:
+        return tryit.contracts(repo)
+    except analyze.AnalyzeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/api/try")
 def api_try(req: TryRequest):
+    """S1 detect of the edited contract against the real one, S2 trace through the repo's real consumer."""
     try:
-        return run_tryit(req.scenario)
-    except Exception as e:
+        return tryit.run(req.repo, req.path, req.text)
+    except analyze.AnalyzeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/runs")

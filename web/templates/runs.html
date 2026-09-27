@@ -12,9 +12,10 @@
         <tr>
           <th>Run ID</th>
           <th>Created</th>
-          <th>Upstream PR</th>
-          <th>Companion PR</th>
+          <th>Engine</th>
+          <th>Checks</th>
           <th>Verdict</th>
+          <th>Pull requests</th>
           <th>Details</th>
         </tr>
       </thead>
@@ -24,21 +25,27 @@
           <td>
             <strong class="mono">{{ r.run_id }}</strong>
             {% if r.is_sample %}<span class="badge badge-human">Sample</span>{% endif %}
+            {% if r.repo %}<span class="tech">{{ r.repo }}</span>{% endif %}
           </td>
-          <td>{{ r.created_at or 'N/A' }}</td>
-          <td><a href="{{ r.upstream_pr_url }}" target="_blank" rel="noreferrer">Upstream PR</a></td>
-          <td><a href="{{ r.companion_pr_url }}" target="_blank" rel="noreferrer">Companion PR</a></td>
+          <td>{{ (r.created_at[:16] | replace("T", " ")) ~ " UTC" if r.created_at else "N/A" }}</td>
+          <td>{{ r.engine or "—" }}{% if r.tokens %}<span class="tech">{{ "{:,.0f}".format(r.tokens) }} tokens</span>{% endif %}</td>
+          <td class="mono">
+            {% for c in r.checks %}<span title="{{ c.id }} {{ c.status }}: {{ c.details or '' }}" class="{{ 'ok' if c.status == 'pass' else 'bad' if c.status == 'fail' else 'muted' }}">{{ c.id }}{{ '✓' if c.status == 'pass' else '✗' if c.status == 'fail' else '–' }}</span> {% else %}<span class="muted">not verified</span>{% endfor %}
+          </td>
           <td>
-            {% if r.verdict and r.verdict.verdict == 'green' %}
-            <span class="stamp green sm">Cleared · green</span>
-            {% else %}
-            <span class="stamp red sm">Guilty · red</span>
-            {% endif %}
+            {% if r.verdict == 'green' %}<span class="stamp green sm">Cleared · green</span>
+            {% elif r.verdict == 'red' %}<span class="stamp red sm">Guilty · red</span>
+            {% else %}<span class="stamp plain sm">No verdict</span>{% endif %}
+            {% if r.status %}<span class="tech">{{ r.status }}</span>{% endif %}
           </td>
-          <td><a href="/runs/{{ r.run_id }}" class="btn btn-primary"><span class="btn-stack"><span>Open case file</span><span class="btn-sub">Run replay</span></span></a></td>
+          <td>
+            {% if r.upstream_url %}<a href="{{ r.upstream_url }}" target="_blank" rel="noreferrer">Upstream change</a>{% endif %}
+            {% if r.companion_pr_url %}<br><a href="{{ r.companion_pr_url }}" target="_blank" rel="noreferrer">Draft PR</a>{% endif %}
+          </td>
+          <td><a href="{{ r.details_url }}" class="btn btn-primary"><span class="btn-stack"><span>Open case file</span><span class="btn-sub">{{ "Run replay" if r.details_url.startswith("/runs/") else "Live run page" }}</span></span></a></td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="muted">No runs recorded yet. Open a case on the home page.</td></tr>
+        <tr><td colspan="7" class="muted">No runs recorded yet. Open a case on the home page.</td></tr>
         {% endfor %}
       </tbody>
     </table>

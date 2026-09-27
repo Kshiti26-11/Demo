@@ -116,6 +116,13 @@ def remote_file(run_id: str, name: str, ttl: float = 2.0) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def live_run_ids(ttl: float = 30.0) -> list[str]:
+    """Every run the cloud runner has a live branch for (syncsnitch-live/<run_id>), newest first."""
+    refs = _fetch(f"{analyze.API}/repos/{RUNNER_REPO}/git/matching-refs/heads/syncsnitch-live/", ttl)
+    ids = [str(r.get("ref", "")).rsplit("/", 1)[-1] for r in refs or [] if isinstance(r, dict)]
+    return sorted((i for i in ids if analyze.valid_run_id(i)), reverse=True)
+
+
 def remote_state(run_id: str, ttl: float = 2.0) -> dict | None:
     text = remote_file(run_id, "state.json", ttl)
     try:

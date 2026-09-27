@@ -4,7 +4,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from web.webapp import analyze
+from web.webapp import analyze, history
 
 ROOT = Path(__file__).resolve().parents[2]
 REFS = ROOT / "contracts" / "reference"
@@ -66,3 +66,10 @@ def fake_github(request: httpx.Request) -> httpx.Response:
 @pytest.fixture
 def fake_github_client(monkeypatch):
     monkeypatch.setattr(analyze, "client", lambda: analyze.GitHub(None, transport=httpx.MockTransport(fake_github)))
+
+
+@pytest.fixture(autouse=True)
+def _no_live_run_sources(monkeypatch):
+    """Case files and The lineup also read the cloud runner (GitHub) and this machine's run folders: off in tests
+    unless a test switches them on (history.LIVE_SOURCES = True with its own fake sources)."""
+    monkeypatch.setattr(history, "LIVE_SOURCES", False)

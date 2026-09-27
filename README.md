@@ -142,9 +142,9 @@ meaning under it:
 |---|---|---|
 | `/` | **Open a case** · run the 3 agents | paste a repo, `/pull/<n>`, `/tree/<branch>` or `/compare/<a>...<b>` link and press Enter |
 | `/live/<run_id>` | live run | S1–S9 tracker, the three agent cards, the live agent log, the diff, the checks, Approve / Reject |
-| `/runs` | **Case files** · runs replay | every recorded run: timeline, drift, impact map, diff, V1–V6, PR links |
-| `/matrix` | **The lineup** · live matrix | billing before/after × orders v1/v2, real REST calls in-process; gRPC and DB from the last container run |
-| `/try` | **Commit a crime** · try-it sandbox | four prebaked contract changes, detect + trace live in under a second |
+| `/runs` | **Case files** · runs replay | every real run: published replays, cloud runs in any state (red, waiting) and this machine's runs, with engine, tokens, V1–V6, verdict and PR links |
+| `/matrix` | **The lineup** · live matrix | one real run as a matrix: consumer before/after the fix × upstream v1/v2, from its own S1–S2 findings and its V3/V4 container tests, test by test; pick any run |
+| `/try` | **Commit a crime** · try-it sandbox | loads a repo's real contracts from GitHub; edit one (or pick a crime built from a real field) and S1 detect + S2 trace run against its real consumer |
 | `/analyze` | **Stakeout** · repo analyzer | the full S1–S2 tables for any repo; pick upstream, consumer, base and head by hand, then start S3–S9 |
 
 ---

@@ -1,78 +1,59 @@
 {% extends "base.html" %}
-{% block title %}Live Contract Matrix — SyncSnitch{% endblock %}
+{% block title %}The lineup — SyncSnitch{% endblock %}
 {% block content %}
-{% macro cell(c, ok_code, broken_code) %}
-  {% if c.verdict == 'ok' %}
-  <div class="cell ok">
-    <span class="cell-word">Clean</span>
-    <span class="cell-code">{{ ok_code }} · HTTP {{ c.status_code }}</span>
-    {% if c.body %}<span class="cell-body">{{ c.body }}</span>{% endif %}
+{% set L = lineup %}
+{% macro cell(c) %}
+  <div class="cell {{ 'ok' if c.status == 'clean' else 'broken' if c.status == 'broken' else 'skipped' }}">
+    <span class="cell-word">{{ {"clean": "Clean", "broken": "Broken"}.get(c.status, "Not run") }}</span>
+    <span class="cell-code">{{ c.details }}</span>
+    {% if c.endpoints %}
+    <ul class="cell-tests">
+      {% for e in c.endpoints %}<li>✗ {{ e.endpoint }} · {{ (e.failure or "")|upper }}{% if e.why %}<span class="msg">{{ e.why }}</span>{% endif %}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if c.tests %}
+    <ul class="cell-tests">
+      {% for t in c.tests %}<li class="{{ t.status }}">{{ "✓" if t.status == "pass" else "✗" if t.status == "fail" else "–" }} {{ t.name }}{% if t.message %}<span class="msg">{{ t.message }}</span>{% endif %}</li>{% endfor %}
+    </ul>
+    {% endif %}
   </div>
-  {% else %}
-  <div class="cell broken">
-    <span class="cell-word">Broken</span>
-    <span class="cell-code">{% if broken_code %}{{ broken_code }} · {% endif %}HTTP {{ c.status_code }}</span>
-    {% if c.body %}<span class="cell-body">{{ c.body }}</span>{% endif %}
-  </div>
-  {% endif %}
 {% endmacro %}
 <div class="card">
   <div class="sec-head">
     <h2>The lineup</h2>
-    <span class="label">Live compatibility matrix · billing-service vs orders-service v1 and v2 · real REST calls, in-process</span>
+    <span class="label">Compatibility matrix of a real run · the consumer before and after the fix × the upstream contract v1 and v2</span>
   </div>
+  {% if L.run %}
+  <form method="get" action="/matrix" class="lineup-pick">
+    <label for="run-pick" class="label">Run</label>
+    <select id="run-pick" name="run" onchange="this.form.submit()">
+      {% for r in L.runs %}
+      <option value="{{ r.run_id }}" {% if r.run_id == L.run.run_id %}selected{% endif %}>{{ r.run_id }} · {{ r.verdict or "no verdict" }}{% if r.engine %} · {{ r.engine }}{% endif %}</option>
+      {% endfor %}
+    </select>
+    <noscript><button class="btn" type="submit">Show</button></noscript>
+    <a href="{{ L.run.details_url }}">Open this case file</a>
+    {% if L.run.upstream_url %}<a href="{{ L.run.upstream_url }}" target="_blank" rel="noreferrer">Upstream change</a>{% endif %}
+    {% if L.run.companion_pr_url %}<a href="{{ L.run.companion_pr_url }}" target="_blank" rel="noreferrer">Draft PR</a>{% endif %}
+  </form>
   <div class="lineup">
     <span class="corner"></span>
-    <span class="col-head">Orders v1<span class="tech">Old contract</span></span>
-    <span class="col-head">Orders v2<span class="tech">New contract</span></span>
+    <span class="col-head">Upstream v1<span class="tech">Old contract (base)</span></span>
+    <span class="col-head">Upstream v2<span class="tech">New contract (head)</span></span>
 
-    <span class="row-head">Billing before fix<span class="tech">Consumer without the adapter</span></span>
-    {{ cell(matrix.before.v1, "OK (201 / 409)", "") }}
-    {{ cell(matrix.before.v2, "OK (201 / 409)", "") }}
+    <span class="row-head">Consumer before the fix<span class="tech">Its code at the head commit</span></span>
+    {{ cell(L.before.v1) }}
+    {{ cell(L.before.v2) }}
 
-    <span class="row-head">Billing after fix<span class="tech">Consumer with the tolerant-reader adapter</span></span>
-    {{ cell(matrix.after.v1, "OK (201 / 409)", "") }}
-    {{ cell(matrix.after.v2, "OK (201 / 409) · adapter", "Pending H-2 companion branch re-vendor") }}
+    <span class="row-head">Consumer after the fix<span class="tech">Branch syncsnitch/{{ L.run.run_id }}</span></span>
+    {{ cell(L.after.v1) }}
+    {{ cell(L.after.v2) }}
   </div>
-  <p class="muted">Every cell is a real HTTP call on this site: create invoice for o-1001 (expects 201) and o-1002 (expects 409).</p>
-</div>
-
-<div class="card">
-  <div class="sec-head">
-    <h2>gRPC and DB</h2>
-    <span class="label">From the latest recorded container run (V3 / V4 dual-run checks)</span>
-  </div>
-  {% if matrix.container_runs and matrix.container_runs.run_id %}
-  <p class="muted">Source run: <strong class="mono">{{ matrix.container_runs.run_id }}</strong></p>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Surface / Check</th>
-          <th>Status</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for key, label in [("v3", "V3: Backward Compatibility (v1)"), ("v4", "V4: Forward Compatibility (v2)")] %}
-        {% set chk = matrix.container_runs[key] %}
-        {% if chk %}
-        <tr>
-          <td><strong>{{ label }}</strong></td>
-          <td>
-            {% if chk.status in ("pass", "passed") %}<span class="stamp green sm">Pass</span>
-            {% elif chk.status in ("skip", "skipped") %}<span class="stamp plain sm">Skipped</span>
-            {% else %}<span class="stamp red sm">Fail</span>{% endif %}
-          </td>
-          <td>{{ chk.details }}</td>
-        </tr>
-        {% endif %}
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <p class="muted">Every cell comes from run <strong class="mono">{{ L.run.run_id }}</strong>{% if L.run.repo %} on {{ L.run.repo }}{% endif %}:
+    before × v1 is the contract the consumer was built for; before × v2 is what S1 detect, S2 trace and the Tracer found;
+    after × v1 and after × v2 are the Docker checks V3 and V4 of the fix, test by test.</p>
   {% else %}
-  <p class="muted">No container run recorded yet. Run H-1 / the hero run, or start one from a repo analysis page.</p>
+  <p class="muted">No verified run yet. Open a case on the home page: its results show up here.</p>
   {% endif %}
 </div>
 {% endblock %}

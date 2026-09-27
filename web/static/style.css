@@ -607,6 +607,14 @@ footer { border-top: 1px solid var(--line); background: var(--panel); color: var
 .cell-word { font: 400 1.7rem/1 var(--display); letter-spacing: 0.04em; }
 .cell-code { font: 0.78rem var(--mono); opacity: 0.92; }
 .cell-body { font: 0.7rem/1.5 var(--mono); opacity: 0.72; overflow-wrap: anywhere; text-align: left; justify-self: stretch; }
+.cell.skipped { background: var(--inset); color: var(--muted); border: 1px dashed var(--line); }
+.cell-tests { list-style: none; margin: 0; padding: 0; font: 0.7rem/1.6 var(--mono); text-align: left; justify-self: stretch; }
+.cell-tests .fail { color: #FFB4A6; }
+.cell-tests .msg { display: block; opacity: 0.75; padding-left: 1.4em; overflow-wrap: anywhere; }
+.lineup-pick { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 16px; }
+.lineup-pick select { font: 0.8rem var(--mono); max-width: 100%; }
+td .ok  { color: var(--green); font-weight: 600; }
+td .bad { color: var(--red); font-weight: 600; }
 
 /* ── Stakeout (repo analyzer) and Commit a crime (sandbox) ────────────── */
 .repo-form { display: grid; gap: 10px; }
@@ -633,6 +641,14 @@ footer { border-top: 1px solid var(--line); background: var(--panel); color: var
 .scenarios { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .scenarios .btn { flex-direction: column; align-items: flex-start; justify-content: center; min-height: 62px; padding: 8px 16px; white-space: normal; text-align: left; }
 .btn-primary .tech { color: var(--graphite); }
+.crime-editor { width: 100%; min-height: 320px; padding: 12px 14px; resize: vertical; tab-size: 2;
+  border: 1.5px solid var(--line-2); border-radius: var(--r); background: var(--inset); color: var(--heading);
+  font: 0.8rem/1.5 var(--mono); }
+.crime-editor:focus { outline: none; border-color: var(--manila-2); }
+.crime-files { display: flex; flex-wrap: wrap; gap: 8px; }
+.crime-files .btn { flex-direction: column; align-items: flex-start; min-height: 52px; }
+.scenarios .btn, .crime-files .btn { overflow-wrap: anywhere; word-break: break-word; }
+.crime-meta { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
 
 /* ── Mermaid impact graph ─────────────────────────────────────────────── */
 .mermaid { overflow-x: auto; background: var(--inset); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; }

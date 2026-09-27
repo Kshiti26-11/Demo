@@ -1,19 +1,41 @@
 {% extends "base.html" %}
-{% block title %}Try-It Sandbox — SyncSnitch{% endblock %}
+{% block title %}Commit a crime — SyncSnitch{% endblock %}
 {% block content %}
 <div class="card">
   <div class="sec-head">
     <h2>Commit a crime</h2>
-    <span class="label">Try-it sandbox · contract drift &amp; ripple · trigger a breaking change and watch it get caught</span>
+    <span class="label">Try-it sandbox · edit your repo's real contract and watch S1 detect and S2 trace catch it, live</span>
   </div>
-  <p class="muted">Select a prebaked contract drift scenario to run deterministic detection (S1) and consumer tracing (S2) live in under 1 second.</p>
-  <div class="scenarios">
-    {% for key, name, tech in [("rest_field_rename", "REST: Field Rename", "OpenAPI · customer_name renamed"),
-                               ("rest_enum_rename", "REST: Enum Rename", "OpenAPI · PENDING → AWAITING_PAYMENT"),
-                               ("grpc_fields_removed", "gRPC: Fields Removed", "protobuf · fields removed, enum renamed"),
-                               ("db_column_changes", "DB: Column Changes", "Alembic · columns added and renamed")] %}
-    <button type="button" onclick="runScenario('{{ key }}')" class="btn btn-secondary" id="btn-{{ key }}">{{ name }}<span class="tech">{{ tech }}</span></button>
-    {% endfor %}
+  <form class="repo-form" id="crime-repo" autocomplete="off">
+    <label class="repo-label" for="crime-link">GitHub repo</label>
+    <div class="repo-row">
+      <input id="crime-link" name="repo" value="https://github.com/kshiti26-11/demo" spellcheck="false">
+      <button class="btn btn-primary" type="submit">Load contracts</button>
+    </div>
+    <span class="repo-hint">The contracts come from the upstream at its head commit; the trail runs through the repo's real consumer at the same commit.</span>
+  </form>
+</div>
+
+<div class="card" id="crime-scene" hidden>
+  <div class="sec-head">
+    <h2>The scene</h2>
+    <span class="label" id="crime-where"></span>
+  </div>
+  <div class="stack">
+    <div>
+      <span class="label">One-click crimes · built from the real file</span>
+      <div class="scenarios" id="crime-list"></div>
+    </div>
+    <div>
+      <span class="label">Or edit the contract yourself</span>
+      <div class="crime-files" id="crime-files"></div>
+    </div>
+    <textarea id="crime-text" class="crime-editor" spellcheck="false" aria-label="Contract file"></textarea>
+    <div class="btn-row">
+      <button class="btn btn-primary" type="button" id="crime-run">Detect &amp; trace</button>
+      <button class="btn btn-secondary" type="button" id="crime-reset">Put back the real file</button>
+      <span class="crime-meta" id="crime-status" role="status"></span>
+    </div>
   </div>
 </div>
 
@@ -29,7 +51,7 @@
   <div class="card">
     <div class="sec-head">
       <h2 id="hits-header">The trail</h2>
-      <span class="label">Downstream consumer usages &amp; impacted endpoints (S2 trace)</span>
+      <span class="label">Real consumer usages &amp; impacted endpoints (S2 trace)</span>
     </div>
     <div class="table-wrap" id="hits-table-container"></div>
   </div>
@@ -37,24 +59,58 @@
 
 <script>
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-async function runScenario(name) {
-  document.querySelectorAll('.scenarios .btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-secondary'); });
-  const btn = document.getElementById('btn-' + name);
-  if (btn) { btn.classList.remove('btn-secondary'); btn.classList.add('btn-primary'); }
+const $ = (id) => document.getElementById(id);
+let scene = null, current = null;
 
-  const res = await fetch('/api/try', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scenario: name })
+function setStatus(text) { $('crime-status').textContent = text; }
+
+function pickFile(path, text) {
+  current = path;
+  $('crime-text').value = text ?? scene.files[path];
+  document.querySelectorAll('#crime-files .btn').forEach(b => {
+    const on = b.dataset.path === path;
+    b.classList.toggle('btn-primary', on); b.classList.toggle('btn-secondary', !on);
   });
-  if (!res.ok) {
-    alert('Error running scenario: ' + res.statusText);
-    return;
-  }
-  const data = await res.json();
-  document.getElementById('results-area').hidden = false;
+}
 
-  // Render changes
+async function loadContracts(link) {
+  setStatus('Loading the contracts…');
+  $('crime-scene').hidden = false;
+  $('results-area').hidden = true;
+  const res = await fetch('/api/try/contracts?repo=' + encodeURIComponent(link));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { setStatus('Could not load: ' + (data.detail || res.statusText)); return; }
+  scene = data;
+  $('crime-where').textContent = `${data.repo} · upstream ${data.upstream || '(root)'} → consumer ${data.consumer || '(root)'} · head ${data.head_sha.slice(0, 12)}`;
+  $('crime-files').innerHTML = Object.keys(data.files).map(p =>
+    `<button type="button" class="btn btn-secondary" data-path="${esc(p)}">${esc(p.split('/').pop())}<span class="tech">${esc(p)}</span></button>`).join('');
+  $('crime-files').querySelectorAll('.btn').forEach(b => b.onclick = () => pickFile(b.dataset.path));
+  $('crime-list').innerHTML = data.crimes.map((c, i) =>
+    `<button type="button" class="btn btn-secondary" data-i="${i}">${esc(c.label)}<span class="tech">${esc(c.path.split('/').pop())}</span></button>`).join('')
+    || '<span class="muted">No simple crime found in these files: edit one below.</span>';
+  $('crime-list').querySelectorAll('.btn').forEach(b => b.onclick = () => {
+    const c = data.crimes[+b.dataset.i];
+    pickFile(c.path, c.text);
+    runCrime(c.label);
+  });
+  pickFile(Object.keys(data.files)[0]);
+  setStatus('Pick a crime, or edit the file and press Detect & trace.');
+}
+
+async function runCrime(label) {
+  if (!scene || !current) return;
+  setStatus('Detecting and tracing…');
+  const t0 = performance.now();
+  const res = await fetch('/api/try', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({repo: $('crime-link').value, path: current, text: $('crime-text').value}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { setStatus('Error: ' + (data.detail || res.statusText)); return; }
+  const s = data.summary;
+  setStatus(`${label ? label + ': ' : ''}${s.breaking} breaking of ${s.changes} changes · ${s.files} consumer files · ${s.endpoints.length} endpoints · ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  $('results-area').hidden = false;
+
   let cHtml = '<table><thead><tr><th>Surface</th><th>Location</th><th>Kind</th><th>Verdict</th><th>Note</th></tr></thead><tbody>';
   for (const c of data.changes) {
     cHtml += `<tr class="${c.breaking ? 'breaking' : ''}">
@@ -65,11 +121,10 @@ async function runScenario(name) {
       <td>${esc(c.note)}</td>
     </tr>`;
   }
-  cHtml += '</tbody></table>';
-  document.getElementById('changes-table-container').innerHTML = cHtml;
+  if (!data.changes.length) cHtml += '<tr><td colspan="5" class="muted">No contract change: the edit matches the real file.</td></tr>';
+  $('changes-table-container').innerHTML = cHtml + '</tbody></table>';
 
-  // Render hits
-  let hHtml = '<table><thead><tr><th>Consumer File</th><th>Line</th><th>Token</th><th>Symbol</th><th>Impacted Endpoints</th></tr></thead><tbody>';
+  let hHtml = '<table><thead><tr><th>Consumer file</th><th>Line</th><th>Token</th><th>Symbol</th><th>Impacted endpoints</th></tr></thead><tbody>';
   for (const h of data.hits) {
     hHtml += `<tr>
       <td><code>${esc(h.file)}</code></td>
@@ -79,10 +134,14 @@ async function runScenario(name) {
       <td>${(h.endpoints || []).map(e => `<strong>${esc(e)}</strong>`).join(', ')}</td>
     </tr>`;
   }
-  if (!data.hits.length) hHtml += '<tr><td colspan="5" class="muted">No consumer usages of these changes.</td></tr>';
-  hHtml += '</tbody></table>';
-  document.getElementById('hits-table-container').innerHTML = hHtml;
-  document.getElementById('results-area').scrollIntoView({behavior: 'smooth', block: 'start'});
+  if (!data.hits.length) hHtml += '<tr><td colspan="5" class="muted">No consumer usage of these changes: this crime hurts nobody.</td></tr>';
+  $('hits-table-container').innerHTML = hHtml + '</tbody></table>';
+  $('results-area').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
+
+$('crime-repo').onsubmit = (e) => { e.preventDefault(); loadContracts($('crime-link').value); };
+$('crime-run').onclick = () => runCrime('');
+$('crime-reset').onclick = () => { if (scene && current) pickFile(current); setStatus('The real file is back.'); };
+loadContracts($('crime-link').value);
 </script>
 {% endblock %}

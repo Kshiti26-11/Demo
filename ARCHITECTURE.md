@@ -169,7 +169,7 @@ Expected drift for the demo: **9 breaking changes**, 3 per surface.
 | **V3** | consumer vs **upstream v1** (backward compatible) | compose run with `CONTRACT_VERSION=v1`: JUnit all green |
 | **V4** | consumer vs **upstream v2** (new contract) | same with v2. Business values are asserted, so silent breaks fail |
 | **V5** | Prism contract examples | `test_rest_contract_examples_parse` green in both runs |
-| **V6** | diff scope | only `billing/`, `contracts/upstream/`, `tests/`, `scripts/`, `README.md`, `.syncsnitch.json` changed; no test deleted |
+| **V6** | diff scope | only `billing/`, `contracts/upstream/`, `tests/`, `scripts/`, `README.md`, `.syncsnitch.json` changed; no test deleted; existing `tests/fixtures/` and `tests/integration/test_*` (the contract spec) unchanged |
 
 3. It writes `verification.json` and `VERIFICATION.md`, and exits 0 only when every check is green.
 

@@ -226,6 +226,49 @@ def test_while_the_fix_round_runs_the_old_verdict_is_not_shown(env):
     del agents._THREADS[RUN_ID]
 
 
+def test_scanner_hits_and_contract_failures_reach_every_agent(env, monkeypatch):
+    """Run w-20260927-064254-35cd: a weak model left the gRPC hit out of impact.json, so the Transformer never fixed
+    GET /payments (amount 0 against v2), and the fix round then edited the contract test. The runner now puts the
+    scanner's hits back into impact.json, gives the Transformer a checklist, and gives the Verifier and the fix
+    round the failing assertion from junit plus the hits the branch has not touched."""
+    hit = {"change_ids": ["grpc:orders.OrderSummary.3:field_removed"], "usage_kind": "attribute", "in_tests": False}
+    (env["run_dir"] / "candidates.json").write_text(json.dumps({"run_id": RUN_ID, "hits": [
+        {**hit, "file": "app.py", "line": 1, "token": "PENDING", "symbol": "NOT_PAYABLE",
+         "change_ids": ["rest:OrderStatus.PENDING:enum_value_removed"], "endpoints": ["POST /invoices/{order_id}"]},
+        {**hit, "file": "payments.py", "line": 14, "token": "total_price", "symbol": "status_from_summary",
+         "endpoints": ["GET /payments/{order_id}/status"]},
+        {**hit, "file": "tests/unit/test_payments.py", "line": 11, "token": "total_price", "in_tests": True,
+         "endpoints": []}]}))
+    (env["run_dir"] / "drift.json").write_text(json.dumps({"run_id": RUN_ID, "changes": [
+        {"id": "rest:OrderStatus.PENDING:enum_value_removed", "surface": "rest", "breaking": True},
+        {"id": "grpc:orders.OrderSummary.3:field_removed", "surface": "grpc", "breaking": True},
+        {"id": "grpc:orders.Money:message_added", "surface": "grpc", "breaking": False}]}))
+    monkeypatch.setenv("FAKE_VERIFY", "contract-fail-once")
+    s = run_agents(env)
+    made = calls(env)
+    assert [c["mode"] for c in made] == ["syncsnitch-tracer", "syncsnitch-transformer", "syncsnitch-verifier",
+                                         "syncsnitch-transformer", "syncsnitch-verifier"]
+    assert (s["phase"], s["verifier"]["verdict"]) == ("approval", "green")
+
+    impact = json.loads((env["run_dir"] / "impact.json").read_text())  # the fake Tracer lists no affected file
+    added = {a["file"]: a for a in impact["affected"]}
+    assert set(added) == {"app.py", "payments.py"} and added["payments.py"]["source"] == "runner"
+    assert any(e["msg"].startswith("The Tracer left out 2 file(s)") for e in s["events"])
+
+    transformer = made[1]["prompt"]
+    assert "Breaking contract surfaces (drift.json): REST, gRPC. Apply tolerant-reader pattern 1" in transformer
+    assert "payments.py:14 (total_price)" in transformer and "test_payments" not in transformer
+    assert "Never edit the existing tests in" in transformer
+
+    assert "{'amount_minor': 0} != {'amount_minor': 1999}" in made[2]["prompt"]  # the Verifier sees the assertion
+    fix = made[3]["prompt"]
+    assert "test_payment_status_uses_real_amount against upstream v2" in fix
+    assert "{'amount_minor': 0} != {'amount_minor': 1999}" in fix
+    assert "has not changed yet (each must still work with v1 and v2): payments.py:14 (total_price)" in fix
+    assert "never the test" in fix
+    assert "Failing contract test" not in made[4]["prompt"]  # round 2 is green: no stale junit facts
+
+
 def test_the_verifier_cannot_overrule_a_failing_check(env, monkeypatch):
     monkeypatch.setenv("FAKE_VERIFY", "fail")
     monkeypatch.setenv("FAKE_BOB_VERDICT", "green")

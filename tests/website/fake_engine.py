@@ -3,6 +3,7 @@
 consumer venvs or pytest-in-pytest. The real CLI is covered by tests/engine.
 
 FAKE_VERIFY=pass|fail-once|fail (default pass): V1 fails on every run (fail), or on the first run only (fail-once).
+FAKE_VERIFY=contract-fail-once: V4 fails on the first run with a pytest assertion in results/junit-v2.xml.
 """
 import argparse
 import json
@@ -35,6 +36,15 @@ def main() -> int:
                   {"id": "V4", "name": "vs v2", "status": skip, "details": "skipped (--no-containers)"},
                   {"id": "V5", "name": "Prism", "status": skip, "details": "skipped (--no-containers)"},
                   {"id": "V6", "name": "diff scope", "status": "pass", "details": "1 files changed within scope"}]
+        if mode == "contract-fail-once" and n == 1:
+            checks[3] = {"id": "V4", "name": "vs v2", "status": "fail",
+                         "details": "4/5 passed (failures: test_payment_status_uses_real_amount)"}
+            (run_dir / "results").mkdir(exist_ok=True)
+            (run_dir / "results" / "junit-v2.xml").write_text(
+                '<testsuites><testsuite tests="1" failures="1"><testcase classname="tests.integration.test_contract" '
+                'name="test_payment_status_uses_real_amount"><failure message="AssertionError: assert {...} == {...}'
+                '&#10;  Differing items:&#10;  {\'amount_minor\': 0} != {\'amount_minor\': 1999}">trace</failure>'
+                '</testcase></testsuite></testsuites>')
         (run_dir / "verification.json").write_text(json.dumps({"run_id": args.run_id, "checks": checks, "summary": {}}))
         print(f"verify run {n}: V1 {v1}")
         return 0

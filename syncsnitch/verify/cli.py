@@ -304,6 +304,10 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
             _, out_mod = runner.run(["git", "-C", str(consumer), "diff", "--name-only", "--diff-filter=MR",
                                      f"{consumer_base_sha}...HEAD"])
             edited_fixtures = [p for p in scoped(out_mod) if p.startswith("tests/fixtures/")]
+            # the contract tests are the spec V3/V4 run against the real upstream: changing their expectations to
+            # match broken code turns a red run green, so the fix must be in the consumer code instead
+            edited_contract_tests = [p for p in scoped(out_mod)
+                                     if p.startswith("tests/integration/") and p.rsplit("/", 1)[-1].startswith("test_")]
 
             if del_tests:
                 checks.append({
@@ -318,6 +322,14 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
                     "name": "diff scope",
                     "status": "fail",
                     "details": f"existing fixtures edited (keep them unchanged, add new ones): {', '.join(edited_fixtures)}",
+                })
+            elif edited_contract_tests:
+                checks.append({
+                    "id": "V6",
+                    "name": "diff scope",
+                    "status": "fail",
+                    "details": "existing contract tests edited (they are the spec: fix the consumer code, not the "
+                               f"test): {', '.join(edited_contract_tests)}",
                 })
             elif disallowed:
                 checks.append({

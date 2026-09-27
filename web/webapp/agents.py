@@ -24,6 +24,7 @@ import subprocess
 import sys
 import threading
 import time
+import xml.etree.ElementTree as ET
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -379,8 +380,13 @@ def _pipeline(run_id: str) -> None:
             if verdict["verdict"] == "green" or rounds >= 1:
                 break
             if not verdict.get("fix_instructions"):
-                emit(run_id, "S6", "verifier", "RED without fix instructions: no automatic fix round", "warn")
-                break
+                facts = _runner_facts(ctx)
+                if not facts:
+                    emit(run_id, "S6", "verifier", "RED without fix instructions: no automatic fix round", "warn")
+                    break
+                verdict = {**verdict, "fix_instructions": facts}
+                emit(run_id, "S6", "verifier", "RED without fix instructions: the fix round uses the runner's "
+                                               "checked facts instead", "warn")
             left = _left(run_id)
             if left < 1.5:
                 emit(run_id, "S6", "verifier", f"RED: {left:.2f} Bobcoins left in this run's budget, not enough for an "
@@ -772,6 +778,133 @@ def _set_agent(run_id: str, agent: str, status: str, state: str | None = None) -
     _update(run_id, agents={agent: status}, stages={agent: status}, **({"state": state} if state else {}))
 
 
+# --- runner guards: the deterministic S1-S2 results are the floor, whatever a (weak) model makes of them ------------
+# Run w-20260927-064254-35cd on the last Gemini fallback: the Tracer left the gRPC hits out of impact.json, the
+# Transformer never touched the proto (GET /payments read the retired field 3 -> amount 0), and the fix round then
+# edited the contract test and invented a response field. These facts go into the prompts so that cannot repeat.
+
+PATTERNS = {"rest": "1 (REST adapter)", "grpc": "2 (gRPC proto + stubs, and from_summary)", "db": "3 (SQL)"}
+CONTRACT_TESTS = "tests/integration/"
+
+
+def _scanner_hits(ctx: dict) -> dict[str, list[dict]]:
+    """Consumer source usages the deterministic scanner found (candidates.json, tests left out), by file."""
+    hits = (live._load(ctx["run_dir"] / "candidates.json") or {}).get("hits") or []
+    by_file: dict[str, list[dict]] = {}
+    for h in hits:
+        f = str(h.get("file") or "").replace("\\", "/") if isinstance(h, dict) else ""
+        if f and not h.get("in_tests") and not f.startswith("tests/"):
+            by_file.setdefault(f, []).append(h)
+    return by_file
+
+
+def _hit_text(file: str, hits: list[dict]) -> str:
+    lines = sorted({h["line"] for h in hits if isinstance(h.get("line"), int)})
+    tokens = ", ".join(sorted({str(h["token"]) for h in hits if h.get("token")}))
+    return f"{file}:{','.join(map(str, lines))} ({tokens})" if lines else f"{file} ({tokens})"
+
+
+def _breaking_surfaces(ctx: dict) -> list[str]:
+    changes = (live._load(ctx["run_dir"] / "drift.json") or {}).get("changes") or []
+    found = {c.get("surface") for c in changes if isinstance(c, dict) and c.get("breaking")}
+    return [s for s in PATTERNS if s in found]
+
+
+def _checklist(ctx: dict) -> str:
+    """What the Transformer must cover, computed from drift.json and candidates.json (impact.json may miss some)."""
+    cons, lines = ctx["cons_rel"], []
+    surfaces = _breaking_surfaces(ctx)
+    if surfaces:
+        lines.append("- Breaking contract surfaces (drift.json): "
+                     + ", ".join("gRPC" if s == "grpc" else s.upper() for s in surfaces)
+                     + ". Apply tolerant-reader pattern " + ", ".join(PATTERNS[s] for s in surfaces)
+                     + " even where impact.json leaves one out.")
+    hits = _scanner_hits(ctx)
+    if hits:
+        lines.append(f"- Every consumer file the deterministic scanner hit must work with v1 and v2 when you are done "
+                     f"(paths under {cons}): " + "; ".join(_hit_text(f, h) for f, h in hits.items()) + ".")
+    lines.append(f"- Never edit the existing tests in {cons}/{CONTRACT_TESTS}: they are the contract spec that V3/V4 "
+                 "run against the real upstream (V6 fails if they change). Keep every billing response JSON exactly as "
+                 "it is: no new, renamed or removed fields.")
+    return "\n".join(lines)
+
+
+def _complete_impact(ctx: dict, impact: dict) -> None:
+    """Add every scanner hit and endpoint the Tracer left out of impact.json back in, and say so in the log."""
+    cons = ctx["cons"].strip("/") + "/" if ctx["cons"] else ""
+    affected = [a for a in impact.get("affected") or [] if isinstance(a, dict)]
+    listed = {str(a.get("file") or "").replace("\\", "/").removeprefix(cons) for a in affected}
+    missed = {f: hs for f, hs in _scanner_hits(ctx).items() if f not in listed}
+    if not missed:
+        return
+    endpoints = [e for e in impact.get("endpoints") or [] if isinstance(e, dict)]
+    known = {str(e.get("endpoint")) for e in endpoints}
+    for f, hs in missed.items():
+        for h in hs:
+            surfaces = sorted({str(c).split(":", 1)[0] for c in h.get("change_ids") or []})
+            surface = "grpc" if f.endswith(".proto") else "db" if f.endswith(".sql") else "/".join(surfaces) or "rest"
+            affected.append({"file": f, "line": h.get("line"), "symbol": h.get("symbol"),
+                             "change_ids": h.get("change_ids") or [], "surface": surface, "failure": "unknown",
+                             "endpoint": (h.get("endpoints") or [None])[0], "source": "runner",
+                             "fix": "Added by the runner: the scanner found this usage and the Tracer did not list it"})
+            for ep in h.get("endpoints") or []:
+                if ep not in known:
+                    known.add(ep)
+                    endpoints.append({"endpoint": ep, "surface": surface, "failure": "silent", "source": "runner",
+                                      "why": f"Added by the runner: {f}:{h.get('line')} reads {h.get('token')}"})
+    impact["affected"], impact["endpoints"] = affected, endpoints
+    (ctx["run_dir"] / "impact.json").write_text(json.dumps(impact, indent=2), encoding="utf-8")
+    emit(ctx["run_id"], "S3", "tracer", f"The Tracer left out {len(missed)} file(s) the scanner hit "
+         f"({', '.join(missed)}): the runner added them to impact.json", "warn")
+
+
+def _contract_failures(ctx: dict) -> list[str]:
+    """Failing V3/V4 contract tests with pytest's assertion message (junit), so nobody has to guess the cause."""
+    checks = {c.get("id"): c.get("status")
+              for c in (live._load(ctx["run_dir"] / "verification.json") or {}).get("checks", [])}
+    out = []
+    for check, ver in (("V3", "v1"), ("V4", "v2")):
+        path = ctx["run_dir"] / "results" / f"junit-{ver}.xml"
+        if checks.get(check) != "fail" or not path.exists():
+            continue  # the junit file of a passing or skipped check may be stale
+        try:
+            root = ET.parse(path).getroot()
+        except ET.ParseError:
+            continue
+        for tc in root.iter("testcase"):
+            bad = tc.find("failure")
+            bad = bad if bad is not None else tc.find("error")
+            if bad is not None:
+                msg = " ".join((bad.get("message") or bad.text or "").split())[:500]
+                out.append(f"{check} {tc.get('classname', '')}::{tc.get('name')} against upstream {ver}: {msg}")
+    return out
+
+
+def _untouched_hits(ctx: dict) -> dict[str, list[dict]]:
+    """Scanner hits in files the Transformer's branch has not changed yet."""
+    code, out = _run(["git", "-C", str(ctx["cons_path"]), "diff", "--name-only", "--relative", "--no-renames",
+                      f"{ctx['head_sha']}...HEAD"])  # a renamed file (revenue.sql -> revenue_v1.sql) counts as changed
+    changed = {ln.strip() for ln in out.splitlines() if ln.strip()} if code == 0 else set()
+    return {f: hs for f, hs in _scanner_hits(ctx).items() if f not in changed}
+
+
+def _runner_facts(ctx: dict) -> list[str]:
+    """Deterministic facts for the Verifier and the fix round: they win over any model's instruction."""
+    facts = [f"Failing contract test {f}" for f in _contract_failures(ctx)]
+    untouched = _untouched_hits(ctx)
+    if untouched:
+        facts.append("Scanner hits in files the branch has not changed yet (each must still work with v1 and v2): "
+                     + "; ".join(_hit_text(f, h) for f, h in untouched.items()))
+    if facts:
+        stale_proto = any(f.endswith(".proto") for f in untouched)
+        facts.append(f"The tests in {CONTRACT_TESTS} are the contract spec: fix the consumer code under "
+                     f"{ctx['cons_rel']}, never the test, and never add or rename a field in a billing response. "
+                     "An actual value of 0 or empty usually means the consumer still reads a field the new upstream "
+                     "removed" + (" (for gRPC: the consumer's proto and generated stubs are still v1)." if stale_proto
+                                  else "; read the new fields through the adapter where that value is built."))
+    return facts
+
+
 # --- S3 Tracer ---------------------------------------------------------------
 
 def _tracer(ctx: dict) -> None:
@@ -793,6 +926,7 @@ Paths are relative to the workspace root. Upstream (the contract owner, read-onl
         _set_agent(run_id, "tracer", "failed")
         why = stream.errors[-1] if stream.errors else "impact.json is missing or not in the expected shape"
         raise StageError(f"the Tracer did not produce impact.json ({why})")
+    _complete_impact(ctx, impact)
     eps = [e for e in impact["endpoints"] if isinstance(e, dict)]
     loud = sum(1 for e in eps if str(e.get("failure")).lower() == "loud")
     silent = sum(1 for e in eps if str(e.get("failure")).lower() == "silent")
@@ -820,6 +954,8 @@ def _transformer(ctx: dict, fix: dict | None = None) -> None:
         prompt = f"""SyncSnitch run {run_id}, step S4. You are Subagent 2, the Downstream Code Transformer, running headless from the SyncSnitch website: never ask questions, keep replies short.
 Paths are relative to the workspace root. The consumer {cons_rel} is inside the git clone {ctx['work_rel']}, already on branch {branch}. The upstream {ctx['up_rel']} is read-only.
 1. Read {run_rel}/impact.json and apply .bob/rules-syncsnitch-transformer/tolerant-reader.md exactly, with UPSTREAM={ctx['up_rel']}, HEAD_REF={ctx['head_sha']}, BASE_REF={ctx['base_sha']}, UPSTREAM_REPO={ctx['repo']}, PR_NUMBER=null, RUN_ID={run_id}. Edit only files inside {cons_rel}.
+   Required coverage, checked by the runner (it wins over impact.json):
+{_checklist(ctx)}
 2. Run the consumer unit tests until they pass: cd {cons_rel} && uv run pytest -q
 3. Commit on {branch}: {commit.format(what=f"tolerant reader for the {up_name} contract change")}
    Do not push.
@@ -830,12 +966,15 @@ Paths are relative to the workspace root. The consumer {cons_rel} is inside the 
                    for c in (live._load(ctx["run_dir"] / "verification.json") or {}).get("checks", [])
                    if c.get("status") == "fail"]
         todo = "\n".join(f"- {i}" for i in fix.get("fix_instructions") or [])
+        facts = "\n".join(f"- {f}" for f in _runner_facts(ctx))
         prompt = f"""SyncSnitch run {run_id}, step S4 fix round. You are Subagent 2, the Downstream Code Transformer, running headless from the SyncSnitch website: never ask questions, keep replies short.
 Paths are relative to the workspace root. The consumer {cons_rel} is inside the git clone {ctx['work_rel']}, on branch {branch}. The upstream {ctx['up_rel']} is read-only. The rules in .bob/rules-syncsnitch-transformer/tolerant-reader.md still apply.
 The Contract Verifier found these failing checks:
 {chr(10).join('- ' + f for f in failing) or '- (see the instructions)'}
-Apply exactly these fix instructions, editing only files inside {cons_rel}:
+Apply these fix instructions, editing only files inside {cons_rel}:
 {todo}
+Facts the runner checked; they win over any instruction above (skip an instruction that edits {CONTRACT_TESTS} or changes a billing response):
+{facts or '- none'}
 Then run cd {cons_rel} && uv run pytest -q until green, and commit on {branch}: {commit.format(what="address the Contract Verifier findings")}
 Do not push. Reply with one line."""
     stream = _agent(ctx, "transformer", prompt)
@@ -904,12 +1043,13 @@ def _verifier(ctx: dict) -> dict:
     verdict_path.unlink(missing_ok=True)
     checks = (live._load(ctx["run_dir"] / "verification.json") or {}).get("checks", [])
     skipped = [c["id"] for c in checks if c.get("status") == "skip"]
+    facts = _runner_facts(ctx) if any(c.get("status") == "fail" for c in checks) else []
     emit(run_id, "S6", "verifier", "Verifier started: judging verification.json")
     prompt = f"""SyncSnitch run {run_id}, step S6. You are Subagent 3, the Contract Verifier, running headless from the SyncSnitch website: never ask questions, never edit code, keep replies short.
 Read {run_rel}/verification.json: the deterministic checks V1-V6 of the Transformer's branch {ctx['branch']}{" (Docker was not running, so " + ", ".join(skipped) + " are skipped)" if skipped else ""}.
 Write {run_rel}/verdict.json:
 {{"run_id": "{run_id}", "verdict": "green|red", "reasons": ["..."], "fix_instructions": ["..."]}}
-Rules: the checks are the only truth. Any check with status "fail" makes the verdict red and needs precise, file-level fix_instructions for the Transformer (read {run_rel}/VERIFICATION.md and the failing consumer files under {ctx['cons_rel']} only if you need them). "skip" is not a failure, but name every skipped check in reasons. Green has an empty fix_instructions list.
+Rules: the checks are the only truth. Any check with status "fail" makes the verdict red and needs precise, file-level fix_instructions for the Transformer (read {run_rel}/VERIFICATION.md and the failing consumer files under {ctx['cons_rel']} only if you need them). "skip" is not a failure, but name every skipped check in reasons. Green has an empty fix_instructions list.{(chr(10) + "Facts the runner checked (base the fix_instructions on them):" + chr(10) + chr(10).join("- " + f for f in facts)) if facts else ""}
 Reply with one line: the verdict and the first reason."""
     stream = _agent(ctx, "verifier", prompt)
     verdict = live._load(verdict_path)

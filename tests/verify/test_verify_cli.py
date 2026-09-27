@@ -260,3 +260,40 @@ def test_verify_v6_fails_when_an_existing_fixture_is_edited(repos, tmp_path):
     v6 = {c["id"]: c for c in data["checks"]}["V6"]
     assert v6["status"] == "fail" and "existing fixtures edited" in v6["details"]
     assert "tests/fixtures/order_v2_paid.json" in v6["details"] and "order_v2_unpaid" not in v6["details"]
+
+
+def test_verify_v6_fails_when_an_existing_contract_test_is_edited(repos, tmp_path):
+    """Run w-20260927-064254-35cd: the fix round changed the contract test's expected JSON to match broken code.
+    The tests V3/V4 run are the spec: editing one fails V6; adding a new one, or editing a unit test, does not."""
+    upstream, consumer = repos
+    git = ["git", "-c", "user.name=test", "-c", "user.email=test@example.com"]
+    contract = consumer / "tests" / "integration" / "test_contract.py"
+    contract.parent.mkdir(parents=True)
+    contract.write_text('def test_payment_status(client):\n    assert client.get("/p").json() == {"amount_minor": 1999}\n',
+                        encoding="utf-8")
+    unit = consumer / "tests" / "unit" / "test_payments.py"
+    unit.parent.mkdir(parents=True)
+    unit.write_text("def test_paid():\n    assert True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=consumer, check=True)
+    subprocess.run([*git, "commit", "-qm", "contract + unit tests"], cwd=consumer, check=True)
+
+    subprocess.run(["git", "checkout", "-q", "-b", "syncsnitch/y"], cwd=consumer, check=True)
+    unit.write_text("import pytest\n\n@pytest.mark.parametrize('v', [1, 2])\ndef test_paid(v):\n    assert v\n",
+                    encoding="utf-8")
+    (contract.parent / "test_v2_examples.py").write_text("def test_new():\n    assert True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=consumer, check=True)
+    subprocess.run([*git, "commit", "-qm", "parametrize a unit test, add a contract test"], cwd=consumer, check=True)
+    args = ["--upstream", str(upstream), "--base", "main", "--head", "feat/v2", "--consumer", str(consumer),
+            "--consumer-base", "main", "--runs-dir", str(tmp_path / "runs"), "--no-containers"]
+    main(["--run-id", "v6-ok", *args], runner=FakeRunner())
+    data = json.loads((tmp_path / "runs" / "v6-ok" / "verification.json").read_text(encoding="utf-8"))
+    assert {c["id"]: c for c in data["checks"]}["V6"]["status"] == "pass"
+
+    contract.write_text(contract.read_text(encoding="utf-8").replace('1999}', '1999, "real_amount": 1999}'),
+                        encoding="utf-8")
+    subprocess.run([*git, "commit", "-qam", "make the contract test expect the new field"], cwd=consumer, check=True)
+    main(["--run-id", "v6-contract", *args], runner=FakeRunner())
+    data = json.loads((tmp_path / "runs" / "v6-contract" / "verification.json").read_text(encoding="utf-8"))
+    v6 = {c["id"]: c for c in data["checks"]}["V6"]
+    assert v6["status"] == "fail" and "existing contract tests edited" in v6["details"]
+    assert v6["details"].endswith("tests/integration/test_contract.py")

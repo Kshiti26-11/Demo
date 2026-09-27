@@ -29,7 +29,8 @@ The three agents are the custom modes in `.bob/custom_modes.yaml` (role, instruc
 engines; their live output is the log stream:
 - **IBM Bob**: `bob run --mode <agent>` (headless IBM Bob Shell). Budget per run in Bobcoins (`SYNCSNITCH_BOB_BUDGET`, default 5).
 - **Gemini** (free tier: Google AI Studio key, OpenAI-compatible endpoint, `SYNCSNITCH_GEMINI_MODEL`, default
-  `gemini-3.8-flash`; free-tier prompts may be used by Google), **Groq** (free tier: GroqCloud key, OpenAI-compatible
+  `gemini-3.8-flash`, then `SYNCSNITCH_GEMINI_FALLBACK_MODELS` in order when a model's daily free-tier quota runs out;
+  free-tier prompts may be used by Google), **Groq** (free tier: GroqCloud key, OpenAI-compatible
   endpoint, `SYNCSNITCH_GROQ_MODEL`, default `llama-3.1-8b-instant`; larger models may need identity verification
   on the free tier), **Grok** (xAI Responses API,
   `SYNCSNITCH_GROK_MODEL`, default `grok-4.7`) or **Claude** (Anthropic Messages API, `SYNCSNITCH_CLAUDE_MODEL`,
@@ -51,7 +52,10 @@ bash scripts/claude_setup.sh   # or Claude: the same with an Anthropic API key
 bash scripts/bob_setup.sh      # or IBM Bob: installs Bob Shell, saves your Bob API key, license
 bash scripts/run_site.sh       # http://localhost:8000
 ```
-Docker Desktop running = V3–V5 run in mock containers; without it they are reported as skipped, never as passed.
+A running Docker engine = V3–V5 run in mock containers; without it they are reported as skipped, never as passed.
+On a Mac without Docker Desktop: `brew install colima docker docker-compose docker-buildx`, add
+`"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`, then `colima start --cpu 2 --memory 4`
+(run `colima start` again after a reboot).
 On Vercel the page runs S1–S2 only (a serverless function cannot host a Bob session) and points to the local runner.
 The Repo Analyzer (`/analyze`) shows the full S1–S2 tables and lets you pick upstream/consumer/base/head by hand. The old
 manual path still works too: `/syncsnitch <link>` in a Bob IDE task (shown on the page when this machine is not set up).

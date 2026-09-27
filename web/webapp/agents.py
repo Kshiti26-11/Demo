@@ -33,7 +33,8 @@ from . import live, llm_agent
 REPO_ROOT = live.REPO_ROOT
 ENV_FILES = (REPO_ROOT / ".env", REPO_ROOT / ".env.local")  # later files win; real environment variables win over both
 _ENV_KEYS = ("BOB_API_KEY", "BOB_TEAM_ID", "SYNCSNITCH_BOB_BUDGET", "SYNCSNITCH_AGENT_BACKEND", "SYNCSNITCH_TOKEN_BUDGET",
-             "GEMINI_API_KEY", "SYNCSNITCH_GEMINI_MODEL", "GROQ_API_KEY", "SYNCSNITCH_GROQ_MODEL",
+             "GEMINI_API_KEY", "SYNCSNITCH_GEMINI_MODEL", "SYNCSNITCH_GEMINI_FALLBACK_MODELS",
+             "GROQ_API_KEY", "SYNCSNITCH_GROQ_MODEL", "SYNCSNITCH_GROQ_FALLBACK_MODELS",
              "XAI_API_KEY", "SYNCSNITCH_GROK_MODEL",
              "ANTHROPIC_API_KEY", "SYNCSNITCH_CLAUDE_MODEL",
              "SYNCSNITCH_CLAUDE_TOKEN_BUDGET")
@@ -715,7 +716,8 @@ def _api_agent(ctx: dict, agent: str, prompt: str, provider: str) -> llm_agent.R
     run_id = ctx["run_id"]
     cap = int(_cap(run_id, agent))
     env = local_env()
-    model, label = llm_agent.model_of(provider, env), LABELS[provider]
+    usable, _ = llm_agent.available_models(provider, env)  # models out of daily quota are skipped
+    model, label = (usable or [llm_agent.model_of(provider, env)])[0], LABELS[provider]
     log_dir = ctx["run_dir"] / provider
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / f"{agent}.prompt.md").write_text(prompt, encoding="utf-8")
@@ -734,9 +736,12 @@ def _api_agent(ctx: dict, agent: str, prompt: str, provider: str) -> llm_agent.R
         used["tokens"] = tokens
         _update(run_id, spent={agent: base + tokens})
 
+    def on_model(new_model: str) -> None:  # a fallback took over: the page, the cost line and commit trailers say so
+        _update(run_id, model=new_model)
+
     try:
         res = llm_agent.run(provider, ctx, agent, prompt, cap, env, say,
-                            lambda name, args: _describe_tool(ctx, name, args), on_usage)
+                            lambda name, args: _describe_tool(ctx, name, args), on_usage, on_model)
     except Exception as e:  # noqa: BLE001 - a broken session must not kill the run silently
         res = llm_agent.Result(cost=used["tokens"], errors=[f"{type(e).__name__}: {e}"])  # keep what was spent
         say(f"{label} session crashed: {type(e).__name__}: {e}", "error")
@@ -858,7 +863,7 @@ def _verify(ctx: dict) -> dict:
     _update(run_id, docker=docker)
     if not docker:
         emit(run_id, "S5", "verifier", "Docker is not running on this machine: V3-V5 (mock containers) will be "
-                                       "skipped. Start Docker Desktop to run them", "warn")
+                                       "skipped. Start a Docker engine (`colima start`, or Docker Desktop) to run them", "warn")
     vpath = ctx["run_dir"] / "verification.json"
     vpath.unlink(missing_ok=True)
     cmd = [*_engine(), "verify", "--run-id", run_id, "--runs-dir", str(live.RUNS_DIR),

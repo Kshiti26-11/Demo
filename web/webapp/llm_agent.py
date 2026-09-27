@@ -32,7 +32,9 @@ import sys
 import time
 import zipfile
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 import yaml
@@ -44,11 +46,13 @@ PROVIDERS = {
     "gemini": {"label": "Gemini", "vendor": "Google", "key": "GEMINI_API_KEY", "model_env": "SYNCSNITCH_GEMINI_MODEL",
                "default_model": "gemini-3.8-flash", "base_env": "SYNCSNITCH_GEMINI_BASE_URL",
                "base": "https://generativelanguage.googleapis.com", "path": "/v1beta/openai/chat/completions",
-               "setup": "bash scripts/gemini_setup.sh", "console": "https://aistudio.google.com/apikey"},
+               "setup": "bash scripts/gemini_setup.sh", "console": "https://aistudio.google.com/apikey",
+               "fallback_env": "SYNCSNITCH_GEMINI_FALLBACK_MODELS"},
     "groq": {"label": "Groq", "vendor": "Groq", "key": "GROQ_API_KEY", "model_env": "SYNCSNITCH_GROQ_MODEL",
              "default_model": "llama-3.1-8b-instant", "base_env": "SYNCSNITCH_GROQ_BASE_URL",
              "base": "https://api.groq.com", "path": "/openai/v1/chat/completions",
-             "setup": "bash scripts/groq_setup.sh", "console": "https://console.groq.com/keys"},
+             "setup": "bash scripts/groq_setup.sh", "console": "https://console.groq.com/keys",
+             "fallback_env": "SYNCSNITCH_GROQ_FALLBACK_MODELS"},
     "grok": {"label": "Grok", "vendor": "xAI", "key": "XAI_API_KEY", "model_env": "SYNCSNITCH_GROK_MODEL",
              "default_model": "grok-4.7", "base_env": "SYNCSNITCH_XAI_BASE_URL", "base": "https://api.x.ai",
              "path": "/v1/responses", "setup": "bash scripts/grok_setup.sh", "console": "https://console.x.ai"},
@@ -74,6 +78,44 @@ def model_of(provider: str, env: dict) -> str:
     return env.get(p["model_env"]) or p["default_model"]
 
 
+# (provider, model) -> when its daily quota comes back (epoch seconds). Free tiers reset at midnight Pacific; a model
+# that ran out is skipped by every later session in this server until then, instead of being asked again.
+_EXHAUSTED: dict[tuple[str, str], float] = {}
+QUOTA_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def _next_reset(now: float | None = None) -> float:
+    t = datetime.fromtimestamp(now if now is not None else time.time(), QUOTA_TZ)
+    return (t.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).timestamp()
+
+
+def mark_exhausted(provider: str, model: str) -> None:
+    _EXHAUSTED[(provider, model)] = _next_reset()
+
+
+def available_models(provider: str, env: dict) -> tuple[list[str], list[str]]:
+    """(models with quota left today, models skipped because their daily quota is used up)."""
+    now = time.time()
+    for k in [k for k, until in _EXHAUSTED.items() if until <= now]:
+        del _EXHAUSTED[k]
+    models = models_of(provider, env)
+    out = [m for m in models if (provider, m) in _EXHAUSTED]
+    return [m for m in models if m not in out], out
+
+
+def quota_reset_text() -> str:
+    """When the free-tier quotas come back, in this machine's local time."""
+    return datetime.fromtimestamp(_next_reset()).strftime("%H:%M")
+
+
+def models_of(provider: str, env: dict) -> list[str]:
+    """The model, then the fallbacks tried in order when a model's daily quota is used up (free tiers count quota
+    per model): SYNCSNITCH_GEMINI_FALLBACK_MODELS=gemini-3.7-flash,gemini-3.1-flash-lite"""
+    p = PROVIDERS[provider]
+    extra = [m.strip() for m in (env.get(p.get("fallback_env", "")) or "").split(",") if m.strip()]
+    return list(dict.fromkeys([model_of(provider, env), *extra]))
+
+
 def api_url(provider: str) -> str:
     p = PROVIDERS[provider]
     return (os.environ.get(p["base_env"]) or p["base"]).rstrip("/") + p["path"]
@@ -91,6 +133,7 @@ class Result:
     errors: list[str] = field(default_factory=list)
     result: str = ""
     turns: int = 0
+    model: str = ""  # the model that finished the session (a fallback, if the first one ran out of quota)
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +201,10 @@ AGENT_TOOLS = {"tracer": ["read_file", "list_dir", "search", "write_file"],
 
 class ToolError(Exception):
     pass
+
+
+class QuotaError(ToolError):
+    """The model's daily quota is used up: it will not answer again today, another model may."""
 
 
 def _within(p: Path, root: Path) -> bool:
@@ -378,7 +425,8 @@ def _post(client: httpx.Client, provider: str, key: str, body: dict) -> dict:
                 f"{p['setup']})" if r.status_code == 429 and daily
                 else f" (add credits in {p['console']})" if any(w in text for w in ("credit", "billing", "balance"))
                 else f" (check {p['key']} in .env.local)" if r.status_code in (401, 403) else "")
-        raise ToolError(f"{p['label']} API {r.status_code}: {str(detail)[:700]}{hint}")
+        error = QuotaError if r.status_code == 429 and daily else ToolError
+        raise error(f"{p['label']} API {r.status_code}: {str(detail)[:700]}{hint}")
     raise ToolError(f"{p['label']} API: too many retries")
 
 
@@ -421,6 +469,14 @@ class _Anthropic:
         self.messages: list[dict] = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
 
     def step(self, results: list[tuple[str, str, bool]] | None, note: str | None) -> Turn:
+        n0 = len(self.messages)
+        try:
+            return self._step(results, note)
+        except ToolError:
+            del self.messages[n0:]  # the step is retried as it was (e.g. on a fallback model)
+            raise
+
+    def _step(self, results: list[tuple[str, str, bool]] | None, note: str | None) -> Turn:
         if results:
             self.messages.append({"role": "user", "content": [
                 {"type": "tool_result", "tool_use_id": cid, "content": out, **({"is_error": True} if err else {})}
@@ -498,6 +554,14 @@ class _OpenAIChat:
         self.n = 0
 
     def step(self, results: list[tuple[str, str, bool]] | None, note: str | None) -> Turn:
+        n0 = len(self.messages)
+        try:
+            return self._step(results, note)
+        except ToolError:
+            del self.messages[n0:]  # the step is retried as it was (e.g. on a fallback model)
+            raise
+
+    def _step(self, results: list[tuple[str, str, bool]] | None, note: str | None) -> Turn:
         if results:
             self.messages += [{"role": "tool", "tool_call_id": cid, "content": ("ERROR: " + out) if err else out}
                               for cid, out, err in results]
@@ -538,15 +602,28 @@ class _OpenAIChat:
 # ---------------------------------------------------------------------------
 
 def run(provider: str, ctx: dict, agent: str, prompt: str, cap_tokens: int, env: dict, say, describe,
-        on_usage) -> Result:
-    """One agent session: loop until the model ends its turn, the turn limit or the token cap."""
+        on_usage, on_model=None) -> Result:
+    """One agent session: loop until the model ends its turn, the turn limit or the token cap. When the model's
+    daily quota is used up, the same step is retried on the next fallback model (on_model(model) is told)."""
     p = PROVIDERS[provider]
-    key, model = env.get(p["key"]), model_of(provider, env)
-    res = Result()
+    key = env.get(p["key"])
+    models, skipped = available_models(provider, env)
+    res = Result(model=(models or skipped)[0])
     if not key:
         res.errors.append(f"{p['key']} is not set ({p['setup']})")
         say(res.errors[-1], "error")
         return res
+    if not models:
+        res.errors.append(f"every configured {p['label']} model has used up its daily quota "
+                          f"({', '.join(skipped)}); it resets at {quota_reset_text()} local time. "
+                          f"Add fallback models or another engine with {p['setup']}")
+        say(res.errors[-1], "error")
+        return res
+    if skipped:
+        say(f"Skipping {', '.join(skipped)}: daily quota used up until {quota_reset_text()} local time", "warn")
+    model = models[0]
+    if on_model and model != model_of(provider, env):
+        on_model(model)
     box = Sandbox(ctx, agent)
     started, tool_calls = time.monotonic(), 0
     with _client() as client:
@@ -565,6 +642,18 @@ def run(provider: str, ctx: dict, agent: str, prompt: str, cap_tokens: int, env:
                 break
             try:
                 turn = session.step(results, note)
+            except QuotaError as e:
+                mark_exhausted(provider, session.model)
+                nxt = next((m for m in models[models.index(session.model) + 1:]), None)
+                if nxt is None:
+                    res.errors.append(str(e))
+                    say(str(e), "error")
+                    break
+                say(f"{session.model}: the daily quota is used up, switching to {nxt}", "warn")
+                session.model = res.model = nxt
+                if on_model:
+                    on_model(nxt)
+                continue
             except ToolError as e:
                 res.errors.append(str(e))
                 say(str(e), "error")
@@ -608,7 +697,7 @@ def run(provider: str, ctx: dict, agent: str, prompt: str, cap_tokens: int, env:
                 break
     secs = int(time.monotonic() - started)
     say(f"{p['label']} session finished: {tool_calls} tool calls · {res.turns} turns · {res.cost:,} tokens · "
-        f"{secs // 60}m {secs % 60:02d}s · {model}", "ok" if not res.errors else "warn")
+        f"{secs // 60}m {secs % 60:02d}s · {res.model}", "ok" if not res.errors else "warn")
     return res
 
 

@@ -193,8 +193,10 @@ def api(request, env, monkeypatch):  # noqa: F811 - the env fixture from test_si
     for name in ("SYNCSNITCH_ANTHROPIC_BASE_URL", "SYNCSNITCH_XAI_BASE_URL", "SYNCSNITCH_GEMINI_BASE_URL",
                  "SYNCSNITCH_GROQ_BASE_URL", "SYNCSNITCH_TOKEN_BUDGET", "SYNCSNITCH_GROK_MODEL",
                  "SYNCSNITCH_GEMINI_MODEL", "SYNCSNITCH_GROQ_MODEL",
+                 "SYNCSNITCH_GEMINI_FALLBACK_MODELS", "SYNCSNITCH_GROQ_FALLBACK_MODELS",
                  *(v["key"] for k, v in llm_agent.PROVIDERS.items() if k != provider)):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(llm_agent, "_EXHAUSTED", {})  # no quota memory leaks between tests
     fake = {"gemini": FakeGemini, "groq": FakeGroq, "grok": FakeGrok, "claude": FakeClaude}[provider]()
     monkeypatch.setattr(llm_agent, "_client", lambda: httpx.Client(transport=httpx.MockTransport(fake)))
     return fake
@@ -333,6 +335,49 @@ def test_a_used_up_daily_quota_says_so_instead_of_retrying(env, api, monkeypatch
     monkeypatch.setattr(llm_agent, "_client", lambda: httpx.Client(transport=httpx.MockTransport(quota)))
     s = run_agents(env)
     assert len(hits) == 1 and "the daily quota is used up" in s["runner"]["error"]
+
+
+def test_a_used_up_daily_quota_moves_to_the_next_model(env, api, monkeypatch):  # noqa: F811
+    """Free tiers count quota per model: the same step is retried on the next fallback model, without sending any
+    tool result twice, and the run records which model did the work."""
+    fallback_env = llm_agent.PROVIDERS[api.provider].get("fallback_env")
+    if not fallback_env:
+        pytest.skip("this engine has no fallback models")
+    first = llm_agent.PROVIDERS[api.provider]["default_model"]
+    monkeypatch.setenv(fallback_env, " backup-model , backup-model ")
+    used = []
+
+    def quota_mid_session(request):
+        body = json.loads(request.content)
+        used.append(body["model"])
+        if body["model"] == first and any(m["role"] == "assistant" for m in body["messages"]):  # the 2nd turn
+            return httpx.Response(429, json={"error": {"code": 429, "message": "Quota exceeded for metric: "
+                                                       "generate_content_free_tier_requests, quotaId: "
+                                                       "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}})
+        return api(request)
+    monkeypatch.setattr(llm_agent, "_client", lambda: httpx.Client(transport=httpx.MockTransport(quota_mid_session)))
+    s = run_agents(env)
+    assert s["phase"] == "approval" and s["runner"]["model"] == "backup-model", \
+        (s["runner"].get("error"), [e["msg"] for e in s["events"]][-6:])
+    assert set(used) == {first, "backup-model"}
+    assert used.count(first) == 2  # the Tracer's two turns; later agents skip the exhausted model
+    msgs_ = [e["msg"] for e in s["events"]]
+    assert sum("switching to backup-model" in m for m in msgs_) == 1
+    assert any(m.startswith(f"Skipping {first}: daily quota used up") for m in msgs_)
+    for q in api.requests:
+        ids = [m["tool_call_id"] for m in q["body"]["messages"] if m["role"] == "tool"]
+        assert len(ids) == len(set(ids))
+    msgs = [e["msg"] for e in s["events"]]
+    assert any(f"{first}: the daily quota is used up, switching to backup-model" in m for m in msgs)
+    assert any("session finished" in m and m.endswith("backup-model") for m in msgs)
+
+
+def test_when_every_model_is_out_of_quota_the_run_stops_without_asking(env, api, monkeypatch):  # noqa: F811
+    for m in llm_agent.models_of(api.provider, agents.local_env()):
+        llm_agent.mark_exhausted(api.provider, m)
+    s = run_agents(env)
+    assert s["phase"] == "failed" and "has used up its daily quota" in s["runner"]["error"]
+    assert api.requests == []
 
 
 def test_a_rate_limit_waits_and_retries(env, api, monkeypatch):  # noqa: F811

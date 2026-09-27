@@ -39,6 +39,10 @@ fi
 say "Model: gemini-3.8-flash (newest Flash, default) or gemini-3.5-flash-lite (lighter; free-tier limits are often higher)"
 read -r -p "Model [gemini-3.8-flash]: " model
 set_var SYNCSNITCH_GEMINI_MODEL "${model:-gemini-3.8-flash}"
+fallbacks_default="gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite"
+say "Free-tier quotas count per model per day. When one runs out mid-run, the agents move on to the next of these."
+read -r -p "Fallback models, comma-separated [$fallbacks_default]: " fallbacks
+set_var SYNCSNITCH_GEMINI_FALLBACK_MODELS "${fallbacks:-$fallbacks_default}"
 read -r -p "Token budget per SyncSnitch run (input + output, all 3 agents) [3000000]: " run_budget
 set_var SYNCSNITCH_TOKEN_BUDGET "${run_budget:-3000000}"
 set_var SYNCSNITCH_AGENT_BACKEND gemini

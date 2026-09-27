@@ -312,10 +312,10 @@ Not supported yet: consumers in languages other than Python, and contracts in ot
 
 | | Owns |
 |---|---|
-| [@Kshiti26-11](https://github.com/Kshiti26-11) | Person 1: `orders-service`, the upstream and its v2 change |
-| [@Cybverse-Pkians](https://github.com/Cybverse-Pkians) | Person 2: `billing-service`, the consumer |
-| [@nishthaa-06](https://github.com/nishthaa-06) | Person 3: the engine and the IBM Bob layer |
-| [@AryannModii](https://github.com/AryannModii) | Person 4: the verifier and the website |
+| [@Kshiti26-11](https://github.com/Kshiti26-11) |
+| [@Cybverse-Pkians](https://github.com/Cybverse-Pkians) | 
+| [@nishthaa-06](https://github.com/nishthaa-06) | 
+| [@AryannModii](https://github.com/AryannModii) | 
 
 **Provenance.** The services, the engine, the verifier and the first website were built in IBM Bob from the
 prompts in [WORK.md](WORK.md). The planning docs, the reference contracts, the scaffolding and later integration work

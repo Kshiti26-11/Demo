@@ -1,0 +1,49 @@
+{
+  "_comment": "Canonical demo data for orders-service. v1 code uses total_price = amount_minor / 100 and status_v1; v2 code uses amount_minor, currency, customer_id and status_v2. Reference copy for SyncSnitch - do not edit.",
+  "orders": [
+    {
+      "order_id": "o-1001",
+      "customer_id": "c-1001",
+      "customer_name": "Ada Lovelace",
+      "amount_minor": 1999,
+      "currency": "USD",
+      "status_v1": "PAID",
+      "status_v2": "PAID",
+      "created_at": "2026-09-01T10:00:00Z",
+      "shipping_eta": null
+    },
+    {
+      "order_id": "o-1002",
+      "customer_id": "c-1002",
+      "customer_name": "Alan Turing",
+      "amount_minor": 500,
+      "currency": "USD",
+      "status_v1": "PENDING",
+      "status_v2": "AWAITING_PAYMENT",
+      "created_at": "2026-09-02T11:00:00Z",
+      "shipping_eta": null
+    },
+    {
+      "order_id": "o-1003",
+      "customer_id": "c-1003",
+      "customer_name": "Grace Hopper",
+      "amount_minor": 12050,
+      "currency": "USD",
+      "status_v1": "SHIPPED",
+      "status_v2": "SHIPPED",
+      "created_at": "2026-09-03T12:00:00Z",
+      "shipping_eta": "2026-09-05T12:00:00Z"
+    },
+    {
+      "order_id": "o-1004",
+      "customer_id": "c-1004",
+      "customer_name": "Edsger Dijkstra",
+      "amount_minor": 4200,
+      "currency": "USD",
+      "status_v1": "CANCELLED",
+      "status_v2": "CANCELLED",
+      "created_at": "2026-09-04T13:00:00Z",
+      "shipping_eta": null
+    }
+  ]
+}
